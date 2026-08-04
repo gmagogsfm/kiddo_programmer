@@ -30,6 +30,14 @@ test("revision prompt passes supervisor feedback to the worker", () => {
   assert.match(prompt, /Edit ONLY app\.html/);
 });
 
+test("first-request prompts include the logo in work and review", () => {
+  const supervisor = buildSupervisorPrompt({ age: 9, projectName: "Stars", kidMessage: "Make a space game", history: "", validatorPath: "/validator.mjs", needsLogo: true });
+  const revision = buildRevisionPrompt({ age: 9, projectName: "Stars", kidMessage: "Make a space game", feedback: "Make the logo clearer.", validatorPath: "/validator.mjs", needsLogo: true });
+  assert.match(supervisor, /app\.html and created logo\.svg/);
+  assert.match(supervisor, /app\.html logo\.svg/);
+  assert.match(revision, /Edit ONLY app\.html and logo\.svg/);
+});
+
 test("review feedback repeats until the supervisor approves", async () => {
   const received = [];
   const outcome = await repeatUntilApproved({

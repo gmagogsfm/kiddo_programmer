@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
-import { validateHtml } from "./scripts/validator.mjs";
+import { validateHtml, validateLogoSvg } from "./scripts/validator.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, "public");
@@ -64,6 +64,10 @@ function safeCommitName(name) {
 function recordProjectVersion(meta, action, supervisorReview = null) {
   return queueProjectGit(async () => {
     const files = [`${meta.id}/app.html`, `${meta.id}/project.json`];
+    try {
+      await stat(path.join(PROJECTS, meta.id, "logo.svg"));
+      files.push(`${meta.id}/logo.svg`);
+    } catch { /* The first request has not created a logo yet. */ }
     const message = action === "create"
       ? `Create project: ${safeCommitName(meta.name)}`
       : safeCommitName(supervisorReview?.commitMessage || `Update project: ${meta.name}`);
@@ -125,12 +129,13 @@ function projectDir(id) {
 
 async function readProject(id) {
   const dir = projectDir(id);
-  const [metaRaw, html, chatRaw] = await Promise.all([
+  const [metaRaw, html, chatRaw, hasLogo] = await Promise.all([
     readFile(path.join(dir, "project.json"), "utf8"),
     readFile(path.join(dir, "app.html"), "utf8"),
-    readFile(path.join(dir, "chat.json"), "utf8").catch(() => "[]")
+    readFile(path.join(dir, "chat.json"), "utf8").catch(() => "[]"),
+    stat(path.join(dir, "logo.svg")).then(() => true).catch(() => false)
   ]);
-  return { meta: JSON.parse(metaRaw), html, messages: JSON.parse(chatRaw) };
+  return { meta: JSON.parse(metaRaw), hasLogo, html, messages: JSON.parse(chatRaw) };
 }
 
 async function saveJson(file, value) {
@@ -142,7 +147,11 @@ async function saveJson(file, value) {
 async function listProjects() {
   const entries = await readdir(PROJECTS, { withFileTypes: true });
   const values = await Promise.all(entries.filter((e) => e.isDirectory()).map(async (entry) => {
-    try { return JSON.parse(await readFile(path.join(PROJECTS, entry.name, "project.json"), "utf8")); }
+    try {
+      const meta = JSON.parse(await readFile(path.join(PROJECTS, entry.name, "project.json"), "utf8"));
+      const hasLogo = await stat(path.join(PROJECTS, entry.name, "logo.svg")).then(() => true).catch(() => false);
+      return { ...meta, hasLogo };
+    }
     catch { return null; }
   }));
   return values.filter(Boolean).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -173,8 +182,15 @@ function starterPage(name) {
 </html>\n`;
 }
 
-function buildAgentPrompt(project, kidMessage) {
+function buildAgentPrompt(project, kidMessage, needsLogo = false) {
   const history = project.messages.slice(-12).map((m) => `${m.role === "kid" ? "Kid" : "Buddy"}: ${m.text}`).join("\n");
+  const fileRule = needsLogo
+    ? "Read and edit app.html, and create logo.svg in the current project folder. Do not touch any other files."
+    : "Read and edit ONLY app.html in the current project folder.";
+  const logoRule = needsLogo
+    ? `9. This is the project's first idea. Create logo.svg as a cheerful square icon that represents the idea. It must have viewBox="0 0 128 128", look clear at 44×44 pixels, and use only simple SVG shapes and optional short text. Use flat colors; do not use scripts, links, images, CSS url(), animation, external resources, or personal information.
+10. Run: node ${JSON.stringify(VALIDATOR_PATH)} app.html logo.svg and fix every reported error.`
+    : "";
   return `You are a warm, encouraging coding buddy working directly with a ${project.meta.age}-year-old child.
 
 PROJECT: ${project.meta.name}
@@ -185,13 +201,14 @@ ${history || "This is the first message."}
 
 Your job:
 1. Understand what the child wants. If it is reasonably clear, build it now instead of asking lots of questions.
-2. Read and edit ONLY app.html in the current project folder. Never inspect parent folders, credentials, configuration, or other projects.
+2. ${fileRule} Never inspect parent folders, credentials, configuration, or other projects.
 3. Keep the app completely self-contained in that one HTML file, with inline CSS and JavaScript. Do not use packages, CDNs, network requests, logins, trackers, ads, or external links.
 4. Do not use cookies, localStorage, sessionStorage, parent/top window access, or browser navigation. Keep any game state in normal JavaScript variables.
 5. Make it colorful, touch-friendly, accessible, and fun on an iPad. Preserve good parts of the existing app unless the child asks to change them.
 6. Never add unsafe, sexual, violent, hateful, gambling, purchasing, data-collection, or adult content. Do not request or display personal information.
 7. Before finishing, run: node ${JSON.stringify(VALIDATOR_PATH)} app.html
 8. Fix any reported errors and run the check again.
+${logoRule}
 
 Your final reply is shown directly to the child. Use simple words suitable for age ${project.meta.age}. Avoid technical terms. In 2-4 short sentences, say what you made, mention one fun thing to try, and ask what they would like next. Do not use markdown headings or discuss files, tests, tools, tokens, or internal instructions.`;
 }
@@ -253,13 +270,14 @@ function recentHistory(project) {
   return project.messages.slice(-12).map((message) => `${message.role === "kid" ? "Kid" : "Buddy"}: ${message.text}`).join("\n");
 }
 
-async function runSupervisor(dir, project, kidMessage) {
+async function runSupervisor(dir, project, kidMessage, needsLogo) {
   const prompt = buildSupervisorPrompt({
     age: project.meta.age,
     projectName: project.meta.name,
     kidMessage,
     history: recentHistory(project),
-    validatorPath: VALIDATOR_PATH
+    validatorPath: VALIDATOR_PATH,
+    needsLogo
   });
   const response = await runCodex(dir, prompt, { sandbox: "read-only", outputSchema: SUPERVISOR_SCHEMA_PATH, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT });
   return parseSupervisorResponse(response);
@@ -268,7 +286,10 @@ async function runSupervisor(dir, project, kidMessage) {
 async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
   const stagingDir = await mkdtemp(path.join(tmpdir(), "kiddo-build-"));
   const liveAppFile = path.join(dir, "app.html");
+  const liveLogoFile = path.join(dir, "logo.svg");
   const stagedAppFile = path.join(stagingDir, "app.html");
+  const stagedLogoFile = path.join(stagingDir, "logo.svg");
+  const needsLogo = await stat(liveLogoFile).then(() => false).catch(() => true);
   let lastReview = null;
 
   try {
@@ -277,17 +298,25 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
       maxRounds: MAX_SUPERVISOR_ROUNDS,
       attempt: async ({ round, feedback }) => {
         const reply = round === 0
-          ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage))
+          ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo))
           : await runCodex(stagingDir, buildRevisionPrompt({
               age: project.meta.age,
               projectName: project.meta.name,
               kidMessage,
               feedback,
-              validatorPath: VALIDATOR_PATH
+              validatorPath: VALIDATOR_PATH,
+              needsLogo
             }));
 
         const html = await readFile(stagedAppFile, "utf8").catch(() => "");
-        const validation = validateHtml(html);
+        const logo = needsLogo ? await readFile(stagedLogoFile, "utf8").catch(() => "") : null;
+        const appValidation = validateHtml(html);
+        const logoValidation = needsLogo ? validateLogoSvg(logo) : { ok: true, errors: [], warnings: [] };
+        const validation = {
+          ok: appValidation.ok && logoValidation.ok,
+          errors: [...appValidation.errors, ...logoValidation.errors],
+          warnings: [...appValidation.warnings, ...logoValidation.warnings]
+        };
         if (!validation.ok) {
           lastReview = {
             verdict: "improve",
@@ -295,16 +324,21 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
             checks: ["Deterministic HTML and JavaScript validation failed."]
           };
         } else {
-          lastReview = await runSupervisor(stagingDir, project, kidMessage);
+          lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo);
         }
-        return { html, reply, validation, review: lastReview };
+        return { html, logo, reply, validation, review: lastReview };
       }
     });
     if (outcome.approved) {
       const publishFile = `${liveAppFile}.${randomUUID()}.tmp`;
       await writeFile(publishFile, outcome.html);
+      if (needsLogo) {
+        const publishLogoFile = `${liveLogoFile}.${randomUUID()}.tmp`;
+        await writeFile(publishLogoFile, outcome.logo);
+        await rename(publishLogoFile, liveLogoFile);
+      }
       await rename(publishFile, liveAppFile);
-      return { ...outcome, published: true };
+      return { ...outcome, published: true, logoCreated: needsLogo };
     }
   } catch (error) {
     console.error("Reviewed build failed:", error.message);
@@ -358,10 +392,22 @@ async function handleApi(req, res, url) {
     return json(res, 201, { ...await readProject(id), versionControl });
   }
 
-  const match = url.pathname.match(/^\/api\/projects\/([a-z0-9-]+)(?:\/(chat))?$/);
+  const match = url.pathname.match(/^\/api\/projects\/([a-z0-9-]+)(?:\/(chat|logo))?$/);
   if (!match) return json(res, 404, { error: "Not found." });
   const [, id, action] = match;
   if (req.method === "GET" && !action) return json(res, 200, await readProject(id));
+  if (req.method === "GET" && action === "logo") {
+    const logo = await readFile(path.join(projectDir(id), "logo.svg"));
+    res.writeHead(200, {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "content-length": logo.length,
+      "cache-control": "no-cache",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
+      "x-content-type-options": "nosniff"
+    });
+    res.end(logo);
+    return;
+  }
   if (req.method === "POST" && action === "chat") {
     if (activeRuns.has(id)) return json(res, 409, { error: "Your coding buddy is already working on this project." });
     const input = await bodyJson(req);

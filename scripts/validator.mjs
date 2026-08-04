@@ -19,3 +19,16 @@ export function validateHtml(html) {
   }
   return { ok: errors.length === 0, errors, warnings };
 }
+
+export function validateLogoSvg(svg) {
+  const errors = [];
+  const value = String(svg || "");
+  if (value.trim().length < 80) errors.push("logo.svg is missing or too small.");
+  if (Buffer.byteLength(value) > 250_000) errors.push("logo.svg is larger than 250 KB.");
+  if (!/^\s*<svg[\s>]/i.test(value) || !/<\/svg\s*>\s*$/i.test(value)) errors.push("logo.svg must contain one complete SVG image.");
+  if (!/<svg[^>]+viewBox\s*=\s*["'][^"']+["']/i.test(value)) errors.push("logo.svg needs a viewBox so it scales cleanly.");
+  if (/<(?:script|foreignObject|iframe|image|use|audio|video|a)\b|\bon[a-z]+\s*=|\b(?:href|src)\s*=|\burl\s*\(|@import|<!DOCTYPE|<\?xml-stylesheet/i.test(value)) {
+    errors.push("logo.svg contains an unsafe or external feature.");
+  }
+  return { ok: errors.length === 0, errors, warnings: [] };
+}

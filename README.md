@@ -15,6 +15,7 @@ Kiddo Programmer is a small, local web-app workshop for children. The app they a
 - Staged builds that publish only after supervisor approval
 - Last-known-good rollback if an agent edit does not pass
 - Friendly in-page errors with retry guidance; children never need browser console tools
+- A custom, reviewed SVG logo generated from each project's first idea
 
 ## Start it
 
@@ -34,7 +35,7 @@ hostname -I
 
 Replace `<PI-IP>` in the printed iPad URL with that address and open the result in Safari. The Pi and iPad must be on the same Wi-Fi network.
 
-Projects are saved separately under `/home/gmagogsfm/kiddo_projects/`. That folder is initialized as its own Git repository automatically, keeping generated apps outside the framework repository. Conversation files remain local and are ignored by the projects repository.
+Projects are saved separately under `/home/gmagogsfm/kiddo_projects/`. That folder is initialized as its own Git repository automatically, keeping generated apps outside the framework repository. Each project's first coding request also creates a local `logo.svg`, which appears in the project list. Conversation files remain local and are ignored by the projects repository.
 
 Every new project and every supervisor-approved app update is committed as a separate version in the projects repository and pushed to its `origin/main` remote. The supervisor is the version gatekeeper and writes the commit summary; the trusted server runs the limited Git commands only after a passing verdict. Rejected builds are not committed. Commit messages never contain the child's chat message.
 
