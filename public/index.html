@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6757e8">
+  <title>Kiddo Programmer</title>
+  <style>
+    :root { --ink:#25304a; --muted:#69738b; --purple:#6757e8; --purple-dark:#5042c9; --cream:#fffaf0; --line:#e5e3ef; --green:#29a66f; --shadow:0 14px 40px rgba(50,47,92,.14); }
+    * { box-sizing:border-box; }
+    html, body { height:100%; }
+    body { margin:0; overflow:hidden; font-family:ui-rounded,"SF Pro Rounded",system-ui,sans-serif; color:var(--ink); background:#eeeaf8; }
+    button, input, select, textarea { font:inherit; }
+    button { -webkit-tap-highlight-color:transparent; }
+    .shell { height:100dvh; display:grid; grid-template-columns:minmax(0, 1.45fr) minmax(340px, .85fr); gap:12px; padding:12px; }
+    .preview-panel, .chat-panel { min-width:0; overflow:hidden; background:white; border-radius:24px; box-shadow:var(--shadow); }
+    .preview-panel { display:flex; flex-direction:column; }
+    .toolbar { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+    .logo { display:grid; place-items:center; width:40px; height:40px; flex:0 0 auto; border-radius:14px; color:white; font-size:21px; background:linear-gradient(145deg,#806df2,#5546d4); transform:rotate(-3deg); }
+    .brand-copy { min-width:0; }
+    .brand-copy strong, .brand-copy span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .brand-copy span { color:var(--muted); font-size:12px; margin-top:1px; }
+    .status { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:999px; color:#267352; background:#e7f8ef; font-size:13px; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--green); }
+    .preview-wrap { position:relative; flex:1; min-height:0; background:linear-gradient(135deg,#edf1ff,#fff8e8); }
+    iframe { width:100%; height:100%; border:0; background:white; }
+    .empty { position:absolute; inset:0; display:grid; place-items:center; padding:30px; text-align:center; }
+    .empty-card { max-width:460px; }
+    .empty-art { font-size:72px; filter:drop-shadow(0 8px 12px rgba(70,60,130,.15)); }
+    .empty h1 { font-size:clamp(28px,4vw,46px); margin:14px 0 8px; }
+    .empty p { color:var(--muted); line-height:1.55; }
+    .primary, .send, .new-project { border:0; color:white; background:var(--purple); font-weight:800; cursor:pointer; box-shadow:0 7px 16px rgba(103,87,232,.25); }
+    .primary:hover, .send:hover, .new-project:hover { background:var(--purple-dark); }
+    .primary { padding:13px 20px; border-radius:14px; }
+    .chat-panel { display:flex; flex-direction:column; }
+    .chat-head { padding:13px 14px; border-bottom:1px solid var(--line); background:var(--cream); }
+    .project-row { display:flex; align-items:center; gap:8px; }
+    .project-select { min-width:0; flex:1; height:42px; padding:0 34px 0 12px; border:1px solid #dcd8eb; border-radius:12px; background:white; color:var(--ink); font-weight:750; }
+    .new-project { width:42px; height:42px; flex:0 0 auto; border-radius:12px; font-size:24px; line-height:1; }
+    .buddy-title { display:flex; align-items:center; gap:9px; margin-top:11px; font-size:14px; font-weight:800; }
+    .buddy-face { display:grid; place-items:center; width:28px; height:28px; border-radius:10px; background:#efeaff; }
+    .messages { flex:1; min-height:0; overflow-y:auto; padding:18px 14px 10px; scroll-behavior:smooth; background:linear-gradient(#fff,#fdfcff); }
+    .message { display:flex; margin:0 0 14px; animation:pop .2s ease-out; }
+    .message.kid { justify-content:flex-end; }
+    .bubble { max-width:86%; padding:11px 14px; border-radius:18px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .buddy .bubble { background:#f0edff; border-bottom-left-radius:6px; }
+    .kid .bubble { color:white; background:var(--purple); border-bottom-right-radius:6px; }
+    .thinking .bubble { color:var(--muted); background:#f3f2f5; }
+    .thinking-dots span { display:inline-block; animation:bounce 1s infinite; }
+    .thinking-dots span:nth-child(2) { animation-delay:.15s; } .thinking-dots span:nth-child(3) { animation-delay:.3s; }
+    .composer { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:white; }
+    .input-row { display:grid; grid-template-columns:48px minmax(0,1fr) 48px; gap:8px; align-items:end; }
+    textarea { width:100%; max-height:120px; min-height:48px; resize:none; padding:13px 14px; border:2px solid #dedbea; outline:0; border-radius:16px; line-height:20px; color:var(--ink); background:#fdfcff; }
+    textarea:focus { border-color:#9287ef; box-shadow:0 0 0 3px #edeaff; }
+    .mic, .send { width:48px; height:48px; border-radius:15px; cursor:pointer; }
+    .mic { border:1px solid #dcd8eb; color:var(--purple); background:#f3f0ff; font-size:21px; }
+    .mic.listening { color:white; background:#eb5274; border-color:#eb5274; animation:pulse 1.2s infinite; }
+    .send { border:0; font-size:21px; }
+    .send:disabled, .mic:disabled { cursor:not-allowed; opacity:.5; box-shadow:none; }
+    .hint { min-height:18px; margin-top:5px; text-align:center; color:var(--muted); font-size:11px; }
+    dialog { width:min(92vw,430px); padding:0; border:0; border-radius:24px; color:var(--ink); box-shadow:0 24px 80px rgba(24,25,50,.3); }
+    dialog::backdrop { background:rgba(34,31,57,.48); backdrop-filter:blur(4px); }
+    .dialog-inner { padding:25px; }
+    .dialog-inner h2 { margin:0 0 6px; font-size:27px; }
+    .dialog-inner p { margin:0 0 20px; color:var(--muted); }
+    label { display:block; margin:14px 0 6px; font-weight:800; }
+    input[type=text], input[type=number] { width:100%; height:48px; padding:0 13px; border:2px solid #dedbea; border-radius:13px; outline:0; }
+    input:focus { border-color:#9287ef; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:22px; }
+    .cancel { padding:12px 16px; border:0; border-radius:13px; color:var(--muted); background:#efedf3; font-weight:750; cursor:pointer; }
+    .toast { position:fixed; z-index:5; left:50%; bottom:22px; transform:translate(-50%,120px); max-width:90vw; padding:11px 16px; border-radius:12px; color:white; background:#32354a; box-shadow:var(--shadow); transition:.25s; }
+    .toast.show { transform:translate(-50%,0); }
+    @keyframes pop { from { opacity:0; transform:translateY(5px); } }
+    @keyframes bounce { 50% { transform:translateY(-4px); } }
+    @keyframes pulse { 50% { transform:scale(1.05); box-shadow:0 0 0 7px rgba(235,82,116,.13); } }
+    @media (max-width:760px) { body { overflow:auto; } .shell { height:auto; min-height:100dvh; grid-template-columns:1fr; grid-template-rows:minmax(52dvh,560px) minmax(48dvh,600px); } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="preview-panel" aria-label="Your app">
+      <header class="toolbar">
+        <div class="brand"><div class="logo">✦</div><div class="brand-copy"><strong>Kiddo Programmer</strong><span id="projectName">Pick a project to begin</span></div></div>
+        <div class="status" id="status"><span class="dot"></span><span>Ready</span></div>
+      </header>
+      <div class="preview-wrap">
+        <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock" hidden></iframe>
+        <div class="empty" id="empty"><div class="empty-card"><div class="empty-art">🪄</div><h1>Make an app with your ideas</h1><p>Tell your coding buddy about a game, story, quiz, drawing tool, or anything else you can imagine.</p><button class="primary" id="emptyCreate">Create my first project</button></div></div>
+      </div>
+    </section>
+    <aside class="chat-panel" aria-label="Chat with your coding buddy">
+      <header class="chat-head">
+        <div class="project-row"><select class="project-select" id="projectSelect" aria-label="Choose a project"><option value="">Choose a project…</option></select><button class="new-project" id="newProject" title="New project" aria-label="Create a new project">+</button></div>
+        <div class="buddy-title"><span class="buddy-face">🤖</span><span>Your coding buddy</span></div>
+      </header>
+      <div class="messages" id="messages" aria-live="polite"><div class="message buddy"><div class="bubble">Hi! Create or pick a project, then tell me what you want to make.</div></div></div>
+      <form class="composer" id="chatForm">
+        <div class="input-row"><button type="button" class="mic" id="mic" title="Speak" aria-label="Speak your message">🎙️</button><textarea id="messageInput" rows="1" maxlength="2000" placeholder="What should we make?" disabled></textarea><button class="send" id="send" aria-label="Send message" disabled>➤</button></div>
+        <div class="hint" id="hint">Pick a project to start chatting</div>
+      </form>
+    </aside>
+  </main>
+
+  <dialog id="createDialog"><form method="dialog" class="dialog-inner" id="createForm"><h2>New project 🚀</h2><p>Give your idea a home. You can change it any time!</p><label for="newName">Project name</label><input id="newName" name="name" type="text" minlength="2" maxlength="60" placeholder="My awesome game" required><label for="newAge">How old is the maker?</label><input id="newAge" name="age" type="number" min="5" max="17" value="9" required><div class="dialog-actions"><button class="cancel" value="cancel" formnovalidate>Not now</button><button class="primary" value="default">Create project</button></div></form></dialog>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const keyFromUrl = new URLSearchParams(location.search).get("key");
+    if (keyFromUrl) { localStorage.setItem("kiddoKey", keyFromUrl); history.replaceState(null, "", location.pathname); }
+    const accessKey = localStorage.getItem("kiddoKey") || "";
+    let currentProject = null;
+    let busy = false;
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, { ...options, headers: { "content-type":"application/json", "x-kiddo-key":accessKey, ...(options.headers || {}) } });
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(value.error || "Something went wrong.");
+      return value;
+    }
+    function toast(text) { $("toast").textContent = text; $("toast").classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => $("toast").classList.remove("show"), 3200); }
+    function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("mic").disabled=value || !currentProject; $("messageInput").disabled=value || !currentProject; $("projectSelect").disabled=value; $("newProject").disabled=value; $("status").innerHTML = value ? '<span class="dot" style="background:#f2a93b"></span><span>Building…</span>' : '<span class="dot"></span><span>Ready</span>'; }
+    function renderMessages(messages) { $("messages").innerHTML=""; for (const message of messages) addMessage(message.role, message.text); }
+    function addMessage(role, text, id="") { const row=document.createElement("div"); row.className=`message ${role}`; if(id) row.id=id; const bubble=document.createElement("div"); bubble.className="bubble"; bubble.textContent=text; row.append(bubble); $("messages").append(row); $("messages").scrollTop=$("messages").scrollHeight; }
+    function renderProject(project) { currentProject=project; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("mic").disabled=false; $("hint").textContent="Tap the microphone or type your idea"; $("projectSelect").value=project.meta.id; }
+    async function refreshProjects(selectId) { const {projects}=await api("/api/projects"); $("projectSelect").innerHTML='<option value="">Choose a project…</option>'; for(const p of projects){const o=document.createElement("option");o.value=p.id;o.textContent=p.name;$("projectSelect").append(o);} if(selectId) $("projectSelect").value=selectId; return projects; }
+    async function loadProject(id) { if(!id)return; try { renderProject(await api(`/api/projects/${id}`)); } catch(e){toast(e.message);} }
+    $("projectSelect").addEventListener("change", (e)=>loadProject(e.target.value));
+    function showCreate(){ $("createDialog").showModal(); setTimeout(()=>$("newName").focus(),50); }
+    $("newProject").addEventListener("click",showCreate); $("emptyCreate").addEventListener("click",showCreate);
+    $("createForm").addEventListener("submit",async(e)=>{e.preventDefault();const submitter=e.submitter;if(submitter?.value==="cancel"){ $("createDialog").close();return;}if(!e.currentTarget.reportValidity())return;try{const project=await api("/api/projects",{method:"POST",body:JSON.stringify({name:$("newName").value,age:Number($("newAge").value)})});$("createDialog").close();$("newName").value="";await refreshProjects(project.meta.id);renderProject(project);}catch(err){toast(err.message);}});
+    $("messageInput").addEventListener("input",()=>{$("messageInput").style.height="auto";$("messageInput").style.height=`${Math.min($("messageInput").scrollHeight,120)}px`;});
+    $("messageInput").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
+    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";addMessage("thinking","Thinking ","thinking");$("thinking").querySelector(".bubble").innerHTML='Thinking <span class="thinking-dots"><span>•</span><span>•</span><span>•</span></span>';setBusy(true);try{const result=await api(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})});$("thinking")?.remove();addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);if(result.validation.warnings?.length) console.info(result.validation.warnings);}catch(err){$("thinking")?.remove();addMessage("buddy",err.message);toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
+
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(Recognition){const recognition=new Recognition();recognition.lang=navigator.language||"en-US";recognition.interimResults=true;recognition.continuous=false;recognition.onstart=()=>{$("mic").classList.add("listening");$("hint").textContent="I’m listening…";};recognition.onresult=(event)=>{$("messageInput").value=Array.from(event.results).map(r=>r[0].transcript).join("");};recognition.onend=()=>{$("mic").classList.remove("listening");$("hint").textContent="Check the words, then tap send";};recognition.onerror=(event)=>{toast(event.error==="not-allowed"?"Please allow the microphone in Safari settings.":"I couldn’t hear that. Try again!");};$("mic").addEventListener("click",()=>{try{recognition.start();}catch{recognition.stop();}});}else{$("mic").addEventListener("click",()=>toast("Voice typing isn’t available here. Try the microphone on the iPad keyboard."));}
+
+    (async()=>{try{const projects=await refreshProjects();if(projects[0])await loadProject(projects[0].id);}catch(e){toast(e.message);$("hint").textContent="Open the private link shown on the Pi";}})();
+  </script>
+</body>
+</html>

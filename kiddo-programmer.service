@@ -1,0 +1,21 @@
+[Unit]
+Description=Kiddo Programmer web app workshop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gmagogsfm
+WorkingDirectory=/home/gmagogsfm/kiddo_programmer
+Environment=NODE_ENV=production
+Environment=PATH=/home/gmagogsfm/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node /home/gmagogsfm/kiddo_programmer/server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/gmagogsfm/kiddo_programmer/data /home/gmagogsfm/kiddo_programmer/projects /home/gmagogsfm/.codex
+
+[Install]
+WantedBy=multi-user.target

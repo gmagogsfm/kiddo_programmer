@@ -1,0 +1,15 @@
+{
+  "name": "kiddo-programmer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A Raspberry Pi powered, kid-friendly web app builder.",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "validate": "node scripts/validate-project.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
