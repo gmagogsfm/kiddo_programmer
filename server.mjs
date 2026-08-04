@@ -167,7 +167,7 @@ function starterPage(name) {
 <body>
   <main>
     <h1>${safeName}</h1>
-    <p>Your new app is ready. Tell your coding buddy what you want to make!</p>
+    <p>Create anything you can imagine! Tell your coding buddy what you want to make.</p>
   </main>
 </body>
 </html>\n`;
