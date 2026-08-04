@@ -33,7 +33,7 @@ npm install --global kiddo-programmer
 
 If npm reports a permissions error, follow npm's guide for [avoiding global-install permission errors](https://docs.npmjs.com/resolving-eacces-permissions-errors) rather than running npm as root.
 
-Version 0.3.0 is ready to package but has not yet been published to npm. Until it is published, use the source installation shown below and install Codex separately with `npm install --global @openai/codex`.
+Version 0.3.1 is ready to package but has not yet been published to npm. Until it is published, use the source installation shown below and install Codex separately with `npm install --global @openai/codex`.
 
 ## 3. Set up the Raspberry Pi service
 

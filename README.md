@@ -28,7 +28,7 @@ The setup wizard asks which coding agent to use, launches that agent's sign-in w
 
 A normal `npm install` deliberately does not request administrator access or launch an account sign-in inside npm's lifecycle hooks. Keeping those actions in the visible `kiddo-programmer setup` command makes installation understandable and safe.
 
-The `kiddo-programmer` package metadata is prepared in this repository but version 0.3.0 still needs to be published to npm before the command above is publicly available. Until then, use the Git checkout instructions in the setup guide.
+The `kiddo-programmer` package metadata is prepared in this repository but version 0.3.1 still needs to be published to npm before the command above is publicly available. Until then, use the Git checkout instructions in the setup guide.
 
 For development from a Git checkout without installing a service:
 
@@ -69,3 +69,7 @@ The preview runs in a sandboxed iframe and every coding turn is scoped to one pr
 There is intentionally no login or access key. Use Kiddo Programmer only on a trusted home or classroom network with adult supervision, and never expose its port directly to the public internet.
 
 The framework and project files live on the Pi, but the default Codex models use OpenAI's service. An internet connection and eligible ChatGPT plan or API billing are therefore required for code generation.
+
+## License
+
+Kiddo Programmer is licensed under the [Apache License 2.0](LICENSE). The software is provided on an "AS IS" basis, without warranties or conditions of any kind. See [NOTICE](NOTICE) for project attribution.

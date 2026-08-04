@@ -33,7 +33,8 @@ test("the npm package includes the runtime and installer", async () => {
   const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   assert.equal(pkg.private, undefined);
   assert.equal(pkg.bin["kiddo-programmer"], "bin/kiddo-programmer.mjs");
-  for (const required of ["bin/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh"]) {
+  assert.equal(pkg.license, "Apache-2.0");
+  for (const required of ["bin/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh", "LICENSE", "NOTICE"]) {
     assert.ok(pkg.files.includes(required), `${required} should be included in npm packages`);
   }
 });
