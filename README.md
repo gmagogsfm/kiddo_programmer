@@ -6,12 +6,15 @@ Kiddo Programmer is a small, local web-app workshop for children. The app they a
 
 - One-page, touch-friendly interface
 - Separate saved projects with the maker's age
-- Text chat plus browser voice input
+- Open-ended text conversation
 - Age-aware, child-safe agent instructions
+- Independent worker and read-only supervisor agents
 - Self-contained HTML apps that work without CDNs or packages
 - Automatic HTML and JavaScript checks after every change
+- Supervisor feedback and bounded worker revision passes
+- Staged builds that publish only after supervisor approval
 - Last-known-good rollback if an agent edit does not pass
-- A private access key for devices on the local network
+- Friendly in-page errors with retry guidance; children never need browser console tools
 
 ## Start it
 
@@ -23,15 +26,17 @@ npm test
 npm start
 ```
 
-The terminal prints a private URL. Find the Pi's address with:
+The terminal prints the local URL. Find the Pi's address with:
 
 ```bash
 hostname -I
 ```
 
-Replace `<PI-IP>` in the printed iPad URL with that address, keep the `?key=...` part, and open the result in Safari. The Pi and iPad must be on the same Wi-Fi network.
+Replace `<PI-IP>` in the printed iPad URL with that address and open the result in Safari. The Pi and iPad must be on the same Wi-Fi network.
 
-Projects are saved under `projects/`. The access key is saved under `data/`; neither directory is committed to Git.
+Projects are saved separately under `/home/gmagogsfm/kiddo_projects/`. That folder is initialized as its own Git repository automatically, keeping generated apps outside the framework repository. Conversation files remain local and are ignored by the projects repository.
+
+Every new project and every supervisor-approved app update is committed as a separate version in the projects repository and pushed to its `origin/main` remote. The supervisor is the version gatekeeper and writes the commit summary; the trusted server runs the limited Git commands only after a passing verdict. Rejected builds are not committed. Commit messages never contain the child's chat message.
 
 ## Start automatically with the Pi
 
@@ -44,7 +49,7 @@ sudo systemctl enable --now kiddo-programmer
 sudo systemctl status kiddo-programmer
 ```
 
-Afterward, use `sudo journalctl -u kiddo-programmer` to see the private iPad link. If the project is moved or the Pi username changes, update the paths and `User` in the service file first.
+Afterward, use `sudo journalctl -u kiddo-programmer` to see the iPad link. If the project is moved or the Pi username changes, update the paths and `User` in the service file first.
 
 ## Configuration
 
@@ -52,14 +57,18 @@ Environment variables:
 
 - `PORT` — web port, default `3000`
 - `HOST` — listening address, default `0.0.0.0`
-- `KIDDO_ACCESS_KEY` — fixed private access key instead of the generated one
+- `KIDDO_PROJECTS_DIR` — separate project storage path, default `../kiddo_projects`
 - `CODEX_BIN` — alternate path to the Codex executable
+- `CODEX_WORKER_MODEL` — worker model, default `gpt-5.6-sol`
+- `CODEX_SUPERVISOR_MODEL` — supervisor model, default `gpt-5.6-sol`
 - `CODEX_TIMEOUT_MS` — maximum agent turn time, default four minutes
-
-## Voice input on iPad
-
-The microphone button uses Safari's speech-recognition support when available. Browser and iOS versions differ, and microphone features can be limited on a plain local `http://` address. The microphone on the iPad keyboard remains a good fallback. For a long-term deployment, put the server behind local HTTPS (for example with Caddy and a locally trusted certificate).
+- `SUPERVISOR_TIMEOUT_MS` — maximum supervisor review time, default two minutes
+- `MAX_SUPERVISOR_REVISIONS` — maximum worker revisions after supervisor feedback, default `1` and capped at `2`
 
 ## Safety notes
 
-The preview runs in a sandboxed iframe and each coding turn is scoped to its project's folder. Generated apps are blocked from network requests and external resources. The access key prevents casual access from other devices on the Wi-Fi, but this is still intended for a trusted home or classroom network with adult supervision—not direct exposure to the public internet.
+The preview runs in a sandboxed iframe and each coding turn is scoped to its project's folder. Generated apps are blocked from network requests and external resources. There is no login or access key, so use this only on a trusted home or classroom network with adult supervision—never expose it directly to the public internet.
+
+Codex runs non-interactively with `approval_policy="never"`. The worker receives `workspace-write` access only to a temporary staging folder; the supervisor receives `read-only` access. Commands that fit those boundaries run without prompting. Requests for broader filesystem or network access fail instead of waiting for an approval that a background web request cannot provide.
+
+Both Codex roles explicitly use `model_reasoning_effort="low"` to keep ordinary children’s requests responsive and reduce reasoning-token usage.

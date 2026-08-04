@@ -8,6 +8,7 @@
   <style>
     :root { --ink:#25304a; --muted:#69738b; --purple:#6757e8; --purple-dark:#5042c9; --cream:#fffaf0; --line:#e5e3ef; --green:#29a66f; --shadow:0 14px 40px rgba(50,47,92,.14); }
     * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
     html, body { height:100%; }
     body { margin:0; overflow:hidden; font-family:ui-rounded,"SF Pro Rounded",system-ui,sans-serif; color:var(--ink); background:#eeeaf8; }
     button, input, select, textarea { font:inherit; }
@@ -33,9 +34,28 @@
     .primary, .send, .new-project { border:0; color:white; background:var(--purple); font-weight:800; cursor:pointer; box-shadow:0 7px 16px rgba(103,87,232,.25); }
     .primary:hover, .send:hover, .new-project:hover { background:var(--purple-dark); }
     .primary { padding:13px 20px; border-radius:14px; }
-    .chat-panel { display:flex; flex-direction:column; }
+    .chat-panel { position:relative; }
+    .project-home { height:100%; overflow-y:auto; padding:24px; background:linear-gradient(155deg,#fffaf0,#f4f0ff); }
+    .project-home-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:20px; }
+    .project-home h2 { margin:0 0 5px; font-size:28px; }
+    .project-home p { margin:0; color:var(--muted); line-height:1.45; }
+    .project-create { width:100%; margin-bottom:14px; padding:16px; border:2px dashed #a99ff1; border-radius:17px; color:var(--purple-dark); background:#f4f1ff; font-weight:850; font-size:17px; cursor:pointer; }
+    .project-create:hover { background:#ece8ff; }
+    .project-list { display:grid; gap:10px; }
+    .project-card { width:100%; display:flex; align-items:center; gap:13px; padding:14px; text-align:left; border:1px solid #dedbea; border-radius:17px; color:var(--ink); background:white; cursor:pointer; box-shadow:0 5px 15px rgba(50,47,92,.07); }
+    .project-card:hover { border-color:#a99ff1; transform:translateY(-1px); }
+    .project-icon { display:grid; place-items:center; width:44px; height:44px; flex:0 0 auto; border-radius:14px; background:#eeeaff; font-size:22px; }
+    .project-card-copy { min-width:0; flex:1; }
+    .project-card strong, .project-card small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .project-card strong { font-size:16px; }
+    .project-card small { margin-top:3px; color:var(--muted); }
+    .project-arrow { color:var(--purple); font-size:22px; }
+    .project-list-empty { padding:24px 12px; text-align:center; color:var(--muted); }
+    .retry { margin-top:12px; padding:10px 15px; border:0; border-radius:12px; color:white; background:var(--purple); font-weight:800; cursor:pointer; }
+    .chat-workspace { height:100%; display:flex; flex-direction:column; }
     .chat-head { padding:13px 14px; border-bottom:1px solid var(--line); background:var(--cream); }
     .project-row { display:flex; align-items:center; gap:8px; }
+    .back-projects { height:42px; padding:0 11px; border:1px solid #dcd8eb; border-radius:12px; color:var(--purple-dark); background:white; font-weight:800; cursor:pointer; }
     .project-select { min-width:0; flex:1; height:42px; padding:0 34px 0 12px; border:1px solid #dcd8eb; border-radius:12px; background:white; color:var(--ink); font-weight:750; }
     .new-project { width:42px; height:42px; flex:0 0 auto; border-radius:12px; font-size:24px; line-height:1; }
     .buddy-title { display:flex; align-items:center; gap:9px; margin-top:11px; font-size:14px; font-weight:800; }
@@ -50,30 +70,27 @@
     .thinking-dots span { display:inline-block; animation:bounce 1s infinite; }
     .thinking-dots span:nth-child(2) { animation-delay:.15s; } .thinking-dots span:nth-child(3) { animation-delay:.3s; }
     .composer { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:white; }
-    .input-row { display:grid; grid-template-columns:48px minmax(0,1fr) 48px; gap:8px; align-items:end; }
+    .input-row { display:grid; grid-template-columns:minmax(0,1fr) 52px; gap:8px; align-items:end; }
     textarea { width:100%; max-height:120px; min-height:48px; resize:none; padding:13px 14px; border:2px solid #dedbea; outline:0; border-radius:16px; line-height:20px; color:var(--ink); background:#fdfcff; }
     textarea:focus { border-color:#9287ef; box-shadow:0 0 0 3px #edeaff; }
-    .mic, .send { width:48px; height:48px; border-radius:15px; cursor:pointer; }
-    .mic { border:1px solid #dcd8eb; color:var(--purple); background:#f3f0ff; font-size:21px; }
-    .mic.listening { color:white; background:#eb5274; border-color:#eb5274; animation:pulse 1.2s infinite; }
-    .send { border:0; font-size:21px; }
-    .send:disabled, .mic:disabled { cursor:not-allowed; opacity:.5; box-shadow:none; }
+    .send { width:52px; height:48px; border:0; border-radius:15px; cursor:pointer; font-size:21px; }
+    .send:disabled { cursor:not-allowed; opacity:.5; box-shadow:none; }
     .hint { min-height:18px; margin-top:5px; text-align:center; color:var(--muted); font-size:11px; }
     dialog { width:min(92vw,430px); padding:0; border:0; border-radius:24px; color:var(--ink); box-shadow:0 24px 80px rgba(24,25,50,.3); }
     dialog::backdrop { background:rgba(34,31,57,.48); backdrop-filter:blur(4px); }
     .dialog-inner { padding:25px; }
     .dialog-inner h2 { margin:0 0 6px; font-size:27px; }
     .dialog-inner p { margin:0 0 20px; color:var(--muted); }
+    .form-error { margin:14px 0 0 !important; padding:10px 12px; border-radius:12px; color:#8a2d32 !important; background:#fff0f1; font-weight:700; }
     label { display:block; margin:14px 0 6px; font-weight:800; }
     input[type=text], input[type=number] { width:100%; height:48px; padding:0 13px; border:2px solid #dedbea; border-radius:13px; outline:0; }
     input:focus { border-color:#9287ef; }
     .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:22px; }
     .cancel { padding:12px 16px; border:0; border-radius:13px; color:var(--muted); background:#efedf3; font-weight:750; cursor:pointer; }
-    .toast { position:fixed; z-index:5; left:50%; bottom:22px; transform:translate(-50%,120px); max-width:90vw; padding:11px 16px; border-radius:12px; color:white; background:#32354a; box-shadow:var(--shadow); transition:.25s; }
+    .toast { position:fixed; z-index:5; left:50%; bottom:22px; transform:translate(-50%,140px); max-width:min(90vw,560px); padding:12px 17px; border-radius:12px; color:white; background:#8a2d32; box-shadow:var(--shadow); transition:.25s; font-weight:700; text-align:center; }
     .toast.show { transform:translate(-50%,0); }
     @keyframes pop { from { opacity:0; transform:translateY(5px); } }
     @keyframes bounce { 50% { transform:translateY(-4px); } }
-    @keyframes pulse { 50% { transform:scale(1.05); box-shadow:0 0 0 7px rgba(235,82,116,.13); } }
     @media (max-width:760px) { body { overflow:auto; } .shell { height:auto; min-height:100dvh; grid-template-columns:1fr; grid-template-rows:minmax(52dvh,560px) minmax(48dvh,600px); } }
   </style>
 </head>
@@ -86,58 +103,67 @@
       </header>
       <div class="preview-wrap">
         <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock" hidden></iframe>
-        <div class="empty" id="empty"><div class="empty-card"><div class="empty-art">🪄</div><h1>Make an app with your ideas</h1><p>Tell your coding buddy about a game, story, quiz, drawing tool, or anything else you can imagine.</p><button class="primary" id="emptyCreate">Create my first project</button></div></div>
+        <div class="empty" id="empty"><div class="empty-card"><div class="empty-art">🪄</div><h1>Make an app with your ideas</h1><p>Choose a project on the right, or create a new one to begin.</p><button class="primary" id="emptyCreate">Choose a project</button></div></div>
       </div>
     </section>
     <aside class="chat-panel" aria-label="Chat with your coding buddy">
-      <header class="chat-head">
-        <div class="project-row"><select class="project-select" id="projectSelect" aria-label="Choose a project"><option value="">Choose a project…</option></select><button class="new-project" id="newProject" title="New project" aria-label="Create a new project">+</button></div>
-        <div class="buddy-title"><span class="buddy-face">🤖</span><span>Your coding buddy</span></div>
-      </header>
-      <div class="messages" id="messages" aria-live="polite"><div class="message buddy"><div class="bubble">Hi! Create or pick a project, then tell me what you want to make.</div></div></div>
-      <form class="composer" id="chatForm">
-        <div class="input-row"><button type="button" class="mic" id="mic" title="Speak" aria-label="Speak your message">🎙️</button><textarea id="messageInput" rows="1" maxlength="2000" placeholder="What should we make?" disabled></textarea><button class="send" id="send" aria-label="Send message" disabled>➤</button></div>
-        <div class="hint" id="hint">Pick a project to start chatting</div>
-      </form>
+      <section class="project-home" id="projectHome" aria-label="Projects">
+        <div class="project-home-head"><div><h2>Your projects</h2><p>Choose one to keep creating.</p></div><span class="buddy-face">✨</span></div>
+        <button class="project-create" id="newProjectHome">＋ Create a new project</button>
+        <div class="project-list" id="projectList"></div>
+      </section>
+      <section class="chat-workspace" id="chatWorkspace" hidden>
+        <header class="chat-head">
+          <div class="project-row"><button class="back-projects" id="backProjects">‹ Projects</button><select class="project-select" id="projectSelect" aria-label="Switch project"><option value="">Switch project…</option></select><button class="new-project" id="newProject" title="New project" aria-label="Create a new project">+</button></div>
+          <div class="buddy-title"><span class="buddy-face">🤖</span><span>Your coding buddy</span></div>
+        </header>
+        <div class="messages" id="messages" aria-live="polite"></div>
+        <form class="composer" id="chatForm">
+          <div class="input-row"><textarea id="messageInput" rows="1" maxlength="2000" placeholder="Tell me anything you want to create…"></textarea><button class="send" id="send" aria-label="Send message">➤</button></div>
+          <div class="hint" id="hint">Type your idea, then tap send</div>
+        </form>
+      </section>
     </aside>
   </main>
 
-  <dialog id="createDialog"><form method="dialog" class="dialog-inner" id="createForm"><h2>New project 🚀</h2><p>Give your idea a home. You can change it any time!</p><label for="newName">Project name</label><input id="newName" name="name" type="text" minlength="2" maxlength="60" placeholder="My awesome game" required><label for="newAge">How old is the maker?</label><input id="newAge" name="age" type="number" min="5" max="17" value="9" required><div class="dialog-actions"><button class="cancel" value="cancel" formnovalidate>Not now</button><button class="primary" value="default">Create project</button></div></form></dialog>
-  <div class="toast" id="toast" role="status"></div>
+  <dialog id="createDialog"><form method="dialog" class="dialog-inner" id="createForm"><h2>New project 🚀</h2><p>Give your idea a home. You can change it any time!</p><label for="newName">Project name</label><input id="newName" name="name" type="text" minlength="2" maxlength="60" placeholder="My awesome game" required><label for="newAge">How old is the maker?</label><input id="newAge" name="age" type="number" min="5" max="17" value="9" required><p class="form-error" id="createError" role="alert" hidden></p><div class="dialog-actions"><button class="cancel" value="cancel" formnovalidate>Not now</button><button class="primary" value="default" id="createSubmit">Create project</button></div></form></dialog>
+  <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const keyFromUrl = new URLSearchParams(location.search).get("key");
-    if (keyFromUrl) { localStorage.setItem("kiddoKey", keyFromUrl); history.replaceState(null, "", location.pathname); }
-    const accessKey = localStorage.getItem("kiddoKey") || "";
     let currentProject = null;
     let busy = false;
 
     async function api(url, options = {}) {
-      const response = await fetch(url, { ...options, headers: { "content-type":"application/json", "x-kiddo-key":accessKey, ...(options.headers || {}) } });
+      let response;
+      try { response = await fetch(url, { ...options, headers: { "content-type":"application/json", ...(options.headers || {}) } }); }
+      catch { throw new Error("I can't reach the Raspberry Pi right now. Ask a grown-up to check that it is running, then try again."); }
       const value = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(value.error || "Something went wrong.");
+      if (!response.ok) throw new Error(value.error || "Something got stuck. Your app is safe, so please try again.");
       return value;
     }
-    function toast(text) { $("toast").textContent = text; $("toast").classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => $("toast").classList.remove("show"), 3200); }
-    function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("mic").disabled=value || !currentProject; $("messageInput").disabled=value || !currentProject; $("projectSelect").disabled=value; $("newProject").disabled=value; $("status").innerHTML = value ? '<span class="dot" style="background:#f2a93b"></span><span>Building…</span>' : '<span class="dot"></span><span>Ready</span>'; }
+    function toast(text) { $("toast").textContent = text; $("toast").classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => $("toast").classList.remove("show"), 7000); }
+    function setStatus(kind="ready") { const values={ready:["#29a66f","Ready"],busy:["#f2a93b","Building & checking…"],error:["#d65059","Please try again"]};const [color,label]=values[kind];$("status").innerHTML=`<span class="dot" style="background:${color}"></span><span>${label}</span>`; }
+    function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("messageInput").disabled=value; $("projectSelect").disabled=value; $("newProject").disabled=value; $("backProjects").disabled=value; if(value)setStatus("busy"); }
     function renderMessages(messages) { $("messages").innerHTML=""; for (const message of messages) addMessage(message.role, message.text); }
     function addMessage(role, text, id="") { const row=document.createElement("div"); row.className=`message ${role}`; if(id) row.id=id; const bubble=document.createElement("div"); bubble.className="bubble"; bubble.textContent=text; row.append(bubble); $("messages").append(row); $("messages").scrollTop=$("messages").scrollHeight; }
-    function renderProject(project) { currentProject=project; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("mic").disabled=false; $("hint").textContent="Tap the microphone or type your idea"; $("projectSelect").value=project.meta.id; }
-    async function refreshProjects(selectId) { const {projects}=await api("/api/projects"); $("projectSelect").innerHTML='<option value="">Choose a project…</option>'; for(const p of projects){const o=document.createElement("option");o.value=p.id;o.textContent=p.name;$("projectSelect").append(o);} if(selectId) $("projectSelect").value=selectId; return projects; }
-    async function loadProject(id) { if(!id)return; try { renderProject(await api(`/api/projects/${id}`)); } catch(e){toast(e.message);} }
+    function renderProjectList(projects) { $("projectList").innerHTML=""; if(!projects.length){const empty=document.createElement("div");empty.className="project-list-empty";empty.textContent="No projects yet. Create one and start imagining!";$("projectList").append(empty);return;} for(const project of projects){const card=document.createElement("button");card.className="project-card";card.type="button";const icon=document.createElement("span");icon.className="project-icon";icon.textContent="🚀";const copy=document.createElement("span");copy.className="project-card-copy";const name=document.createElement("strong");name.textContent=project.name;const age=document.createElement("small");age.textContent=`Maker age ${project.age}`;const arrow=document.createElement("span");arrow.className="project-arrow";arrow.textContent="›";copy.append(name,age);card.append(icon,copy,arrow);card.addEventListener("click",()=>loadProject(project.id));$("projectList").append(card);} }
+    function showProjectHome() { $("chatWorkspace").hidden=true; $("projectHome").hidden=false; }
+    function renderProject(project) { currentProject=project; $("projectHome").hidden=true; $("chatWorkspace").hidden=false; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("hint").textContent="Type your idea, then tap send"; $("projectSelect").value=project.meta.id; }
+    async function refreshProjects(selectId) { const {projects}=await api("/api/projects"); renderProjectList(projects); $("projectSelect").innerHTML='<option value="">Switch project…</option>'; for(const p of projects){const o=document.createElement("option");o.value=p.id;o.textContent=p.name;$("projectSelect").append(o);} if(selectId) $("projectSelect").value=selectId; return projects; }
+    async function loadProject(id) { if(!id)return; try { renderProject(await api(`/api/projects/${id}`));setStatus("ready"); } catch(e){setStatus("error");toast(e.message);} }
     $("projectSelect").addEventListener("change", (e)=>loadProject(e.target.value));
-    function showCreate(){ $("createDialog").showModal(); setTimeout(()=>$("newName").focus(),50); }
-    $("newProject").addEventListener("click",showCreate); $("emptyCreate").addEventListener("click",showCreate);
-    $("createForm").addEventListener("submit",async(e)=>{e.preventDefault();const submitter=e.submitter;if(submitter?.value==="cancel"){ $("createDialog").close();return;}if(!e.currentTarget.reportValidity())return;try{const project=await api("/api/projects",{method:"POST",body:JSON.stringify({name:$("newName").value,age:Number($("newAge").value)})});$("createDialog").close();$("newName").value="";await refreshProjects(project.meta.id);renderProject(project);}catch(err){toast(err.message);}});
+    function showCreate(){ $("createError").hidden=true;$("createDialog").showModal(); setTimeout(()=>$("newName").focus(),50); }
+    $("newProject").addEventListener("click",showCreate); $("newProjectHome").addEventListener("click",showCreate);
+    $("backProjects").addEventListener("click",async()=>{await refreshProjects();showProjectHome();});
+    $("emptyCreate").addEventListener("click",()=>{$("projectHome").scrollIntoView({behavior:"smooth"});});
+    $("createForm").addEventListener("submit",async(e)=>{e.preventDefault();const submitter=e.submitter;if(submitter?.value==="cancel"){ $("createDialog").close();return;}if(!e.currentTarget.reportValidity())return;const error=$("createError");const button=$("createSubmit");error.hidden=true;button.disabled=true;button.textContent="Creating…";try{const project=await api("/api/projects",{method:"POST",body:JSON.stringify({name:$("newName").value,age:Number($("newAge").value)})});$("createDialog").close();$("newName").value="";await refreshProjects(project.meta.id);renderProject(project);setStatus("ready");$("messageInput").focus();}catch(err){error.textContent=err.message;error.hidden=false;}finally{button.disabled=false;button.textContent="Create project";}});
     $("messageInput").addEventListener("input",()=>{$("messageInput").style.height="auto";$("messageInput").style.height=`${Math.min($("messageInput").scrollHeight,120)}px`;});
     $("messageInput").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
-    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";addMessage("thinking","Thinking ","thinking");$("thinking").querySelector(".bubble").innerHTML='Thinking <span class="thinking-dots"><span>•</span><span>•</span><span>•</span></span>';setBusy(true);try{const result=await api(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})});$("thinking")?.remove();addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);if(result.validation.warnings?.length) console.info(result.validation.warnings);}catch(err){$("thinking")?.remove();addMessage("buddy",err.message);toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
+    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";addMessage("thinking","Thinking ","thinking");$("thinking").querySelector(".bubble").innerHTML='Thinking <span class="thinking-dots"><span>•</span><span>•</span><span>•</span></span>';setBusy(true);try{const result=await api(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})});$("thinking")?.remove();addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);setStatus("ready");}catch(err){$("thinking")?.remove();addMessage("buddy",`${err.message} I put your idea back in the box so you can tap send again.`);$("messageInput").value=text;$("messageInput").dispatchEvent(new Event("input"));setStatus("error");toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
 
-    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(Recognition){const recognition=new Recognition();recognition.lang=navigator.language||"en-US";recognition.interimResults=true;recognition.continuous=false;recognition.onstart=()=>{$("mic").classList.add("listening");$("hint").textContent="I’m listening…";};recognition.onresult=(event)=>{$("messageInput").value=Array.from(event.results).map(r=>r[0].transcript).join("");};recognition.onend=()=>{$("mic").classList.remove("listening");$("hint").textContent="Check the words, then tap send";};recognition.onerror=(event)=>{toast(event.error==="not-allowed"?"Please allow the microphone in Safari settings.":"I couldn’t hear that. Try again!");};$("mic").addEventListener("click",()=>{try{recognition.start();}catch{recognition.stop();}});}else{$("mic").addEventListener("click",()=>toast("Voice typing isn’t available here. Try the microphone on the iPad keyboard."));}
-
-    (async()=>{try{const projects=await refreshProjects();if(projects[0])await loadProject(projects[0].id);}catch(e){toast(e.message);$("hint").textContent="Open the private link shown on the Pi";}})();
+    async function start(){try{await refreshProjects();showProjectHome();setStatus("ready");}catch(e){setStatus("error");toast(e.message);$("projectList").innerHTML="";const box=document.createElement("div");box.className="project-list-empty";box.textContent=e.message;const retry=document.createElement("button");retry.className="retry";retry.type="button";retry.textContent="Try again";retry.addEventListener("click",start);box.append(document.createElement("br"),retry);$("projectList").append(box);}}
+    start();
   </script>
 </body>
 </html>
