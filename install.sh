@@ -32,7 +32,7 @@ first_ip() {
 }
 
 check_prerequisites() {
-  require_command node "Node.js 20 or newer is required. See SETUP.md."
+  require_command node "Node.js 20 or newer is required. See the Raspberry Pi setup section in README.md."
   require_command git "Git is required. Install it with: sudo apt install git"
 
   local node_major

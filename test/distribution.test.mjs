@@ -38,3 +38,11 @@ test("the npm package includes the runtime and installer", async () => {
     assert.ok(pkg.files.includes(required), `${required} should be included in npm packages`);
   }
 });
+
+test("the README contains the complete setup and troubleshooting guide", async () => {
+  const readme = await readFile(path.join(root, "README.md"), "utf8");
+  assert.match(readme, /## Raspberry Pi setup/);
+  assert.match(readme, /### 1\. Install the basic tools/);
+  assert.match(readme, /## Administration/);
+  assert.match(readme, /## Troubleshooting/);
+});
