@@ -23,36 +23,34 @@ node --version
 
 Kiddo Programmer requires Node.js 20 or newer. If the reported version begins with `v18` or lower, install a current LTS release using the instructions at [nodejs.org](https://nodejs.org/en/download) and check the version again.
 
-## 2. Install Kiddo Programmer and sign in
+## 2. Install Kiddo Programmer
 
 The Kiddo Programmer npm package includes the Codex CLI dependency:
 
 ```bash
 npm install --global kiddo-programmer
-codex --version
-codex login --device-auth
 ```
 
 If npm reports a permissions error, follow npm's guide for [avoiding global-install permission errors](https://docs.npmjs.com/resolving-eacces-permissions-errors) rather than running npm as root.
 
-Version 0.2.0 is ready to package but has not yet been published to npm. Until it is published, use the source installation shown below and install Codex separately with `npm install --global @openai/codex`.
-
-For a headless Pi, device sign-in is usually easiest. Follow the instructions on screen using another device. You may instead run `codex login` for the normal browser flow. Confirm that it worked:
-
-```bash
-codex login status
-```
-
-Codex supports ChatGPT sign-in for subscription access and API-key sign-in for usage-based access. Treat the files under `~/.codex` as private credentials—never copy them into the project repository or share them.
+Version 0.3.0 is ready to package but has not yet been published to npm. Until it is published, use the source installation shown below and install Codex separately with `npm install --global @openai/codex`.
 
 ## 3. Set up the Raspberry Pi service
 
 Run the guided setup from the installed package:
 
 ```bash
-kiddo-programmer check
 kiddo-programmer setup
 ```
+
+The wizard will:
+
+1. Ask which coding agent to use. OpenAI Codex is currently supported.
+2. Check whether that agent is signed in.
+3. If needed, show a device code and web address so a grown-up can finish signing in from any device.
+4. Continue automatically after sign-in and install the Raspberry Pi service.
+
+Codex supports ChatGPT sign-in for subscription access and API-key sign-in for usage-based access. The guided Pi flow uses device sign-in. Treat the files under `~/.codex` as private credentials—never copy them into the project repository or share them.
 
 The installer asks for your Pi password so it can create a system service. It does not run the coding agents as root. It will:
 
@@ -127,6 +125,7 @@ The defaults are suitable for one family. Available settings are:
 - `PORT`: web port, default `3000`
 - `HOST`: listening address, default `0.0.0.0`
 - `KIDDO_PROJECTS_DIR`: where children's projects are stored
+- `KIDDO_AGENT`: coding-agent adapter selected during setup; currently `codex`
 - `CODEX_WORKER_MODEL`: model used to build apps
 - `CODEX_SUPERVISOR_MODEL`: model used to review them
 - `CODEX_TIMEOUT_MS`: maximum worker time in milliseconds

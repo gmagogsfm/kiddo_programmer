@@ -13,10 +13,19 @@ test("the packaged CLI exposes setup and check commands", async () => {
   assert.match(cli, /kiddo-programmer setup/);
 });
 
+test("setup owns coding-agent selection and authentication", async () => {
+  const installer = await readFile(path.join(root, "install.sh"), "utf8");
+  assert.match(installer, /Choose the coding agent/);
+  assert.match(installer, /codex login --device-auth/);
+  assert.match(installer, /ensure_agent_ready/);
+  assert.match(installer, /KIDDO_AGENT/);
+});
+
 test("the service template contains no machine-specific home path", async () => {
   const template = await readFile(path.join(root, "packaging/kiddo-programmer.service.template"), "utf8");
   assert.doesNotMatch(template, /\/home\/gmagogsfm/);
   assert.match(template, /User=@KIDDO_USER@/);
+  assert.match(template, /Environment=KIDDO_AGENT=@KIDDO_AGENT@/);
   assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_CODEX_HOME@/);
 });
 

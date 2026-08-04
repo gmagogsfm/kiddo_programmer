@@ -21,15 +21,14 @@ After installing Node.js 20+ and Git, the npm distribution installs Kiddo Progra
 
 ```bash
 npm install --global kiddo-programmer
-codex login --device-auth
 kiddo-programmer setup
 ```
 
-The setup command checks the machine, creates a machine-specific system service, starts it immediately, enables it at boot, and prints the address to open on the iPad. See the complete beginner-friendly [Raspberry Pi setup guide](SETUP.md) for prerequisites, sign-in, updating, backups, and troubleshooting.
+The setup wizard asks which coding agent to use, launches that agent's sign-in when necessary, creates a machine-specific system service, starts it immediately, enables it at boot, and prints the address to open on the iPad. OpenAI Codex is the first supported agent; the selection step is ready to grow as more adapters are added. See the complete beginner-friendly [Raspberry Pi setup guide](SETUP.md) for prerequisites, updating, backups, and troubleshooting.
 
 A normal `npm install` deliberately does not request administrator access or launch an account sign-in inside npm's lifecycle hooks. Keeping those actions in the visible `kiddo-programmer setup` command makes installation understandable and safe.
 
-The `kiddo-programmer` package metadata is prepared in this repository but version 0.2.0 still needs to be published to npm before the command above is publicly available. Until then, use the Git checkout instructions in the setup guide.
+The `kiddo-programmer` package metadata is prepared in this repository but version 0.3.0 still needs to be published to npm before the command above is publicly available. Until then, use the Git checkout instructions in the setup guide.
 
 For development from a Git checkout without installing a service:
 
@@ -53,6 +52,7 @@ Service installations keep their settings in `/etc/kiddo-programmer.env`. Develo
 - `PORT` — web port, default `3000`
 - `HOST` — listening address, default `0.0.0.0`
 - `KIDDO_PROJECTS_DIR` — separate project storage path, default `../kiddo_projects`
+- `KIDDO_AGENT` — coding-agent adapter selected during setup; currently `codex`
 - `CODEX_BIN` — alternate path to the Codex executable for development runs
 - `CODEX_WORKER_MODEL` — worker model, default `gpt-5.6-sol`
 - `CODEX_SUPERVISOR_MODEL` — supervisor model, default `gpt-5.6-sol`

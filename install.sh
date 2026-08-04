@@ -34,7 +34,6 @@ first_ip() {
 check_prerequisites() {
   require_command node "Node.js 20 or newer is required. See SETUP.md."
   require_command git "Git is required. Install it with: sudo apt install git"
-  require_command codex "Codex CLI is required. Install it with: npm install --global @openai/codex"
 
   local node_major
   node_major="$(node --version | sed -E 's/^v([0-9]+).*/\1/')"
@@ -43,14 +42,64 @@ check_prerequisites() {
 
   [[ -f "$SCRIPT_DIR/server.mjs" ]] || fail "Run this installer from a complete Kiddo Programmer checkout."
   [[ -f "$TEMPLATE" ]] || fail "The system service template is missing."
+}
+
+choose_agent() {
+  local choice
+  say "Choose the coding agent that will build and review children's projects:"
+  say "  1) OpenAI Codex (supported)"
+  say ""
+
+  if [[ -n "${KIDDO_AGENT:-}" ]]; then
+    choice="$KIDDO_AGENT"
+    say "Using coding agent from KIDDO_AGENT: $choice"
+  elif [[ -t 0 ]]; then
+    read -r -p "Coding agent [1]: " choice
+    choice="${choice:-1}"
+  else
+    choice="1"
+    say "No interactive terminal detected; selecting OpenAI Codex."
+  fi
+
+  case "${choice,,}" in
+    1|codex|openai-codex) selected_agent="codex" ;;
+    *) fail "That coding agent is not supported yet. Choose 1 for OpenAI Codex." ;;
+  esac
+}
+
+ensure_agent_ready() {
+  case "$selected_agent" in
+    codex)
+      require_command codex "Codex CLI is required. The npm package includes it; source installs can run: npm install --global @openai/codex"
+      if codex login status >/dev/null 2>&1; then
+        say "OpenAI Codex is already signed in."
+        return
+      fi
+
+      [[ -t 0 ]] || fail "Codex needs an interactive sign-in. Run 'kiddo-programmer setup' in a terminal."
+      say ""
+      say "Codex needs a grown-up to sign in."
+      say "A code and web address will appear. Complete those instructions on any device."
+      say ""
+      codex login --device-auth || fail "Codex sign-in did not finish. You can run setup again to retry."
+      codex login status >/dev/null 2>&1 || fail "Codex did not report a completed sign-in. Run setup again to retry."
+      say "OpenAI Codex sign-in is complete."
+      ;;
+    *) fail "No setup adapter exists for coding agent: $selected_agent" ;;
+  esac
+}
+
+check_agent() {
+  require_command codex "Codex CLI is required. The npm package includes it; source installs can run: npm install --global @openai/codex"
 
   if ! codex login status >/dev/null 2>&1; then
-    fail "Codex is not signed in. Run 'codex login --device-auth' and then run this installer again."
+    fail "Codex is not signed in. Run 'kiddo-programmer setup' to complete the guided sign-in."
   fi
 }
 
 print_check() {
   check_prerequisites
+  check_agent
   local pi_ip
   pi_ip="$(first_ip || true)"
   say "Kiddo Programmer prerequisites look good."
@@ -68,6 +117,7 @@ render_service() {
   rendered="${rendered//@KIDDO_GROUP@/$install_group}"
   rendered="${rendered//@KIDDO_ROOT@/$SCRIPT_DIR}"
   rendered="${rendered//@KIDDO_CONFIG@/$CONFIG_FILE}"
+  rendered="${rendered//@KIDDO_AGENT@/$selected_agent}"
   rendered="${rendered//@KIDDO_HOME@/$install_home}"
   rendered="${rendered//@KIDDO_BIN_PATH@/$bin_path}"
   rendered="${rendered//@KIDDO_CODEX_BIN@/$codex_bin}"
@@ -84,6 +134,7 @@ write_default_config() {
     printf 'PORT=3000\n'
     printf 'HOST=0.0.0.0\n'
     printf 'KIDDO_PROJECTS_DIR="%s"\n' "$projects_dir"
+    printf 'KIDDO_AGENT=%s\n' "$selected_agent"
     printf 'CODEX_WORKER_MODEL=gpt-5.6-sol\n'
     printf 'CODEX_SUPERVISOR_MODEL=gpt-5.6-sol\n'
     printf 'CODEX_TIMEOUT_MS=240000\n'
@@ -97,6 +148,8 @@ install_service() {
   require_command sudo "sudo is required to install the system service."
   require_command systemctl "This installer requires a Raspberry Pi OS or Debian system that uses systemd."
   check_prerequisites
+  choose_agent
+  ensure_agent_ready
 
   install_user="$(id -un)"
   install_group="$(id -gn)"

@@ -27,7 +27,7 @@ function help() {
 Usage: kiddo-programmer <command>
 
 Commands:
-  setup     Check prerequisites and install or update the Raspberry Pi service
+  setup     Choose an agent, sign in, and install or update the Pi service
   check     Check Node, Git, Codex sign-in, and show the expected iPad URL
   start     Run the server in this terminal (development use)
   status    Show whether the installed service is running
@@ -35,7 +35,6 @@ Commands:
   help      Show this help
 
 First Raspberry Pi setup:
-  codex login --device-auth
   kiddo-programmer setup`);
 }
 

@@ -11,6 +11,7 @@ Group=@KIDDO_GROUP@
 WorkingDirectory=@KIDDO_ROOT@
 EnvironmentFile=-@KIDDO_CONFIG@
 Environment=NODE_ENV=production
+Environment=KIDDO_AGENT=@KIDDO_AGENT@
 Environment=HOME=@KIDDO_HOME@
 Environment=PATH=@KIDDO_BIN_PATH@
 Environment=CODEX_BIN=@KIDDO_CODEX_BIN@
