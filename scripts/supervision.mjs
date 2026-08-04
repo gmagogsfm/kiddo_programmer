@@ -9,6 +9,17 @@ export function parseSupervisorResponse(text) {
   return { verdict: value.verdict, feedback: value.feedback.trim(), checks: value.checks.map((item) => item.trim()).filter(Boolean), commitMessage: value.commitMessage.trim() };
 }
 
+export async function repeatUntilApproved({ maxRounds, attempt }) {
+  let feedback = "";
+  let lastResult = null;
+  for (let round = 0; round < maxRounds; round += 1) {
+    lastResult = await attempt({ round, feedback });
+    if (lastResult.review.verdict === "pass") return { approved: true, ...lastResult };
+    feedback = lastResult.review.feedback;
+  }
+  return { approved: false, ...lastResult };
+}
+
 export function buildSupervisorPrompt({ age, projectName, kidMessage, history, validatorPath }) {
   return `You are an independent quality supervisor for a web app made for a ${age}-year-old child. A separate worker agent edited app.html.
 

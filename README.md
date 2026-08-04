@@ -11,7 +11,7 @@ Kiddo Programmer is a small, local web-app workshop for children. The app they a
 - Independent worker and read-only supervisor agents
 - Self-contained HTML apps that work without CDNs or packages
 - Automatic HTML and JavaScript checks after every change
-- Supervisor feedback and bounded worker revision passes
+- Supervisor feedback loops back to the worker until the review passes
 - Staged builds that publish only after supervisor approval
 - Last-known-good rollback if an agent edit does not pass
 - Friendly in-page errors with retry guidance; children never need browser console tools
@@ -63,7 +63,7 @@ Environment variables:
 - `CODEX_SUPERVISOR_MODEL` — supervisor model, default `gpt-5.6-sol`
 - `CODEX_TIMEOUT_MS` — maximum agent turn time, default four minutes
 - `SUPERVISOR_TIMEOUT_MS` — maximum supervisor review time, default two minutes
-- `MAX_SUPERVISOR_REVISIONS` — maximum worker revisions after supervisor feedback, default `1` and capped at `2`
+- `MAX_SUPERVISOR_ROUNDS` — emergency ceiling for worker/reviewer rounds, default `6` and capped at `10`
 
 ## Safety notes
 

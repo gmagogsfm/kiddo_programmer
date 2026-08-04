@@ -5,7 +5,7 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFil
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse } from "./scripts/supervision.mjs";
+import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
 import { validateHtml } from "./scripts/validator.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -15,7 +15,7 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
 const CODEX_TIMEOUT_MS = Number(process.env.CODEX_TIMEOUT_MS || 240_000);
 const SUPERVISOR_TIMEOUT_MS = Number(process.env.SUPERVISOR_TIMEOUT_MS || 120_000);
-const MAX_SUPERVISOR_REVISIONS = Math.max(0, Math.min(2, Number(process.env.MAX_SUPERVISOR_REVISIONS || 1)));
+const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(10, Number(process.env.MAX_SUPERVISOR_ROUNDS || 6)));
 const WORKER_MODEL = process.env.CODEX_WORKER_MODEL || "gpt-5.6-sol";
 const SUPERVISOR_MODEL = process.env.CODEX_SUPERVISOR_MODEL || "gpt-5.6-sol";
 const WORKER_REASONING_EFFORT = "low";
@@ -269,38 +269,42 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
   const stagingDir = await mkdtemp(path.join(tmpdir(), "kiddo-build-"));
   const liveAppFile = path.join(dir, "app.html");
   const stagedAppFile = path.join(stagingDir, "app.html");
-  let reply = "";
-  let feedback = "";
   let lastReview = null;
 
   try {
     await copyFile(liveAppFile, stagedAppFile);
-    for (let attempt = 0; attempt <= MAX_SUPERVISOR_REVISIONS; attempt += 1) {
-      reply = attempt === 0
-        ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage))
-        : await runCodex(stagingDir, buildRevisionPrompt({
-            age: project.meta.age,
-            projectName: project.meta.name,
-            kidMessage,
-            feedback,
-            validatorPath: VALIDATOR_PATH
-          }));
+    const outcome = await repeatUntilApproved({
+      maxRounds: MAX_SUPERVISOR_ROUNDS,
+      attempt: async ({ round, feedback }) => {
+        const reply = round === 0
+          ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage))
+          : await runCodex(stagingDir, buildRevisionPrompt({
+              age: project.meta.age,
+              projectName: project.meta.name,
+              kidMessage,
+              feedback,
+              validatorPath: VALIDATOR_PATH
+            }));
 
-      const html = await readFile(stagedAppFile, "utf8").catch(() => "");
-      const validation = validateHtml(html);
-      if (!validation.ok) {
-        feedback = `The automatic checks found these errors:\n- ${validation.errors.join("\n- ")}`;
-        lastReview = { verdict: "improve", feedback, checks: ["Deterministic HTML and JavaScript validation failed."] };
-      } else {
-        lastReview = await runSupervisor(stagingDir, project, kidMessage);
-        if (lastReview.verdict === "pass") {
-          const publishFile = `${liveAppFile}.${randomUUID()}.tmp`;
-          await writeFile(publishFile, html);
-          await rename(publishFile, liveAppFile);
-          return { html, reply, validation, review: lastReview, published: true };
+        const html = await readFile(stagedAppFile, "utf8").catch(() => "");
+        const validation = validateHtml(html);
+        if (!validation.ok) {
+          lastReview = {
+            verdict: "improve",
+            feedback: `The automatic checks found these errors:\n- ${validation.errors.join("\n- ")}`,
+            checks: ["Deterministic HTML and JavaScript validation failed."]
+          };
+        } else {
+          lastReview = await runSupervisor(stagingDir, project, kidMessage);
         }
-        feedback = lastReview.feedback;
+        return { html, reply, validation, review: lastReview };
       }
+    });
+    if (outcome.approved) {
+      const publishFile = `${liveAppFile}.${randomUUID()}.tmp`;
+      await writeFile(publishFile, outcome.html);
+      await rename(publishFile, liveAppFile);
+      return { ...outcome, published: true };
     }
   } catch (error) {
     console.error("Reviewed build failed:", error.message);
@@ -319,7 +323,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
 
   return {
     html: oldHtml,
-    reply: "My checker found something that still needs work, so I kept your working app safe. Try that idea once more and I’ll take another run at it!",
+    reply: "I couldn't finish that change, but your working app is still safe. Please ask a grown-up to check the Raspberry Pi.",
     validation: { ok: true, errors: [], warnings: ["The reviewed update was not accepted; the previous version was restored."] },
     review: lastReview,
     published: false
