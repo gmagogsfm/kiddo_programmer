@@ -1,75 +1,71 @@
 # Kiddo Programmer
 
-Kiddo Programmer is a small, local web-app workshop for children. The app they are making stays on the left, and their conversation with a coding buddy stays on the right. It runs on a Raspberry Pi and opens in Safari on an iPad.
+Kiddo Programmer is a free, self-hosted AI app workshop for children. It runs on a Raspberry Pi and opens from an iPad on the same private Wi-Fi network. The app a child is making stays on the left, while their conversation with a friendly coding buddy stays on the right.
 
-## What is included
+## What makes it different
 
-- One-page, touch-friendly interface
-- Separate saved projects with the maker's age
-- Open-ended text conversation
+- A simple, touch-friendly project chooser and creative workspace
+- Open-ended creation instead of a fixed collection of lessons
 - Age-aware, child-safe agent instructions
-- Independent worker and read-only supervisor agents
-- Self-contained HTML apps that work without CDNs or packages
-- Automatic HTML and JavaScript checks after every change
-- Supervisor feedback loops back to the worker until the review passes
-- Staged builds that publish only after supervisor approval
-- Last-known-good rollback if an agent edit does not pass
-- Friendly in-page errors with retry guidance; children never need browser console tools
-- A custom, reviewed SVG logo generated from each project's first idea
+- Separate worker and read-only supervisor agents
+- Automatic checks and repair loops before a new version is shown
+- A last-known-good version when an attempted change fails
+- Self-contained HTML apps without third-party packages or trackers
+- A custom local project logo generated from the child's first idea
+- Separate framework and project repositories with version history
+- Friendly in-page progress and errors; children do not need developer tools
 
-## Start it
+## Install on a Raspberry Pi
 
-Requirements: Node.js 20+ and an authenticated Codex CLI.
+After installing Node.js 20+ and Git, the npm distribution installs Kiddo Programmer and its Codex CLI dependency together:
 
 ```bash
-codex login
+npm install --global kiddo-programmer
+codex login --device-auth
+kiddo-programmer setup
+```
+
+The setup command checks the machine, creates a machine-specific system service, starts it immediately, enables it at boot, and prints the address to open on the iPad. See the complete beginner-friendly [Raspberry Pi setup guide](SETUP.md) for prerequisites, sign-in, updating, backups, and troubleshooting.
+
+A normal `npm install` deliberately does not request administrator access or launch an account sign-in inside npm's lifecycle hooks. Keeping those actions in the visible `kiddo-programmer setup` command makes installation understandable and safe.
+
+The `kiddo-programmer` package metadata is prepared in this repository but version 0.2.0 still needs to be published to npm before the command above is publicly available. Until then, use the Git checkout instructions in the setup guide.
+
+For development from a Git checkout without installing a service:
+
+```bash
 npm test
 npm start
 ```
 
-The terminal prints the local URL. Find the Pi's address with:
+The terminal prints the local URL. Projects default to a sibling folder named `kiddo_projects`, keeping generated apps and conversation data outside this framework repository.
 
-```bash
-hostname -I
-```
+## How project versions work
 
-Replace `<PI-IP>` in the printed iPad URL with that address and open the result in Safari. The Pi and iPad must be on the same Wi-Fi network.
+Each new project and every supervisor-approved update becomes a separate local Git commit in the projects repository. The supervisor reviews staged work and writes the update summary; rejected builds are not published or committed. If the projects repository has an `origin` remote, approved versions are also pushed there. A failed remote backup never prevents the child from continuing locally.
 
-Projects are saved separately under `/home/gmagogsfm/kiddo_projects/`. That folder is initialized as its own Git repository automatically, keeping generated apps outside the framework repository. Each project's first coding request also creates a local `logo.svg`, which appears in the project list. Conversation files remain local and are ignored by the projects repository.
-
-Every new project and every supervisor-approved app update is committed as a separate version in the projects repository and pushed to its `origin/main` remote. The supervisor is the version gatekeeper and writes the commit summary; the trusted server runs the limited Git commands only after a passing verdict. Rejected builds are not committed. Commit messages never contain the child's chat message.
-
-## Start automatically with the Pi
-
-The included `kiddo-programmer.service` matches this Pi's current username and project path. Install it once:
-
-```bash
-sudo cp kiddo-programmer.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now kiddo-programmer
-sudo systemctl status kiddo-programmer
-```
-
-Afterward, use `sudo journalctl -u kiddo-programmer` to see the iPad link. If the project is moved or the Pi username changes, update the paths and `User` in the service file first.
+`chat.json` files remain local and are ignored by the projects repository. Commit messages never contain the child's chat messages.
 
 ## Configuration
 
-Environment variables:
+Service installations keep their settings in `/etc/kiddo-programmer.env`. Development runs can use the same environment variables directly:
 
 - `PORT` — web port, default `3000`
 - `HOST` — listening address, default `0.0.0.0`
 - `KIDDO_PROJECTS_DIR` — separate project storage path, default `../kiddo_projects`
-- `CODEX_BIN` — alternate path to the Codex executable
+- `CODEX_BIN` — alternate path to the Codex executable for development runs
 - `CODEX_WORKER_MODEL` — worker model, default `gpt-5.6-sol`
 - `CODEX_SUPERVISOR_MODEL` — supervisor model, default `gpt-5.6-sol`
 - `CODEX_TIMEOUT_MS` — maximum agent turn time, default four minutes
 - `SUPERVISOR_TIMEOUT_MS` — maximum supervisor review time, default two minutes
 - `MAX_SUPERVISOR_ROUNDS` — emergency ceiling for worker/reviewer rounds, default `6` and capped at `10`
 
-## Safety notes
+Both Codex roles explicitly use low reasoning effort to keep ordinary requests responsive and control model usage.
 
-The preview runs in a sandboxed iframe and each coding turn is scoped to its project's folder. Generated apps are blocked from network requests and external resources. There is no login or access key, so use this only on a trusted home or classroom network with adult supervision—never expose it directly to the public internet.
+## Safety boundary
 
-Codex runs non-interactively with `approval_policy="never"`. The worker receives `workspace-write` access only to a temporary staging folder; the supervisor receives `read-only` access. Commands that fit those boundaries run without prompting. Requests for broader filesystem or network access fail instead of waiting for an approval that a background web request cannot provide.
+The preview runs in a sandboxed iframe and every coding turn is scoped to one project's staged folder. Generated apps are blocked from network requests and external resources. Codex runs non-interactively: the worker can write only inside staging, while the supervisor receives read-only access. Requests outside those boundaries fail instead of waiting for permission.
 
-Both Codex roles explicitly use `model_reasoning_effort="low"` to keep ordinary children’s requests responsive and reduce reasoning-token usage.
+There is intentionally no login or access key. Use Kiddo Programmer only on a trusted home or classroom network with adult supervision, and never expose its port directly to the public internet.
+
+The framework and project files live on the Pi, but the default Codex models use OpenAI's service. An internet connection and eligible ChatGPT plan or API billing are therefore required for code generation.

@@ -1,15 +1,46 @@
 {
   "name": "kiddo-programmer",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "type": "module",
   "description": "A Raspberry Pi powered, kid-friendly web app builder.",
+  "bin": {
+    "kiddo-programmer": "bin/kiddo-programmer.mjs"
+  },
+  "files": [
+    "bin/",
+    "packaging/",
+    "public/",
+    "schemas/",
+    "scripts/",
+    "README.md",
+    "SETUP.md",
+    "server.mjs",
+    "install.sh"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gmagogsfm/KiddoProgrammer.git"
+  },
+  "homepage": "https://github.com/gmagogsfm/KiddoProgrammer#readme",
+  "bugs": "https://github.com/gmagogsfm/KiddoProgrammer/issues",
+  "keywords": [
+    "raspberry-pi",
+    "kids",
+    "education",
+    "coding",
+    "codex"
+  ],
+  "dependencies": {
+    "@openai/codex": "^0.146.0"
+  },
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
+    "prepack": "npm test",
     "validate": "node scripts/validate-project.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "npm": ">=9"
   }
 }
