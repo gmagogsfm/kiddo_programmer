@@ -45,5 +45,6 @@ test("the README contains the complete setup and troubleshooting guide", async (
   assert.match(readme, /### 1\. Install the basic tools/);
   assert.match(readme, /## Administration/);
   assert.match(readme, /## Troubleshooting/);
+  assert.match(readme, /assets\/pong-ui\.png/);
   assert.match(readme, /assets\/architecture\.svg/);
 });
