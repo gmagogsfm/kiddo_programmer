@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
-import { browserSecurityHeaders, isAuthorized, isSameOriginMutation, safeEqual, securePreviewHtml, sessionValue } from "./scripts/security.mjs";
+import { browserSecurityHeaders, isSameOriginMutation, securePreviewHtml } from "./scripts/security.mjs";
 import { validateHtml, validateLogoSvg } from "./scripts/validator.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -19,8 +19,6 @@ const SUPERVISOR_TIMEOUT_MS = Number(process.env.SUPERVISOR_TIMEOUT_MS || 120_00
 const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(10, Number(process.env.MAX_SUPERVISOR_ROUNDS || 6)));
 const WORKER_MODEL = process.env.CODEX_WORKER_MODEL || "gpt-5.6-sol";
 const SUPERVISOR_MODEL = process.env.CODEX_SUPERVISOR_MODEL || "gpt-5.6-sol";
-const PAIRING_TOKEN = process.env.KIDDO_PAIRING_TOKEN || randomBytes(24).toString("base64url");
-const SECURE_COOKIE = process.env.KIDDO_SECURE_COOKIE === "1";
 const MAX_PROJECTS = Math.max(1, Math.min(500, Number(process.env.KIDDO_MAX_PROJECTS || 100)));
 const MAX_PENDING_BUILDS = Math.max(1, Math.min(50, Number(process.env.KIDDO_MAX_PENDING_BUILDS || 8)));
 const CHAT_HISTORY_LIMIT = Math.max(20, Math.min(1000, Number(process.env.KIDDO_CHAT_HISTORY_LIMIT || 200)));
@@ -133,11 +131,7 @@ function takeRateLimit(req, bucket, limit, windowMs) {
   return true;
 }
 
-function requireApiAccess(req, res) {
-  if (!isAuthorized(req.headers.cookie, PAIRING_TOKEN)) {
-    json(res, 401, { error: "This iPad needs a grown-up to pair it with Kiddo Programmer first." });
-    return false;
-  }
+function requireApiSafety(req, res) {
   if (!isSameOriginMutation(req)) {
     json(res, 403, { error: "That request did not come from Kiddo Programmer." });
     return false;
@@ -431,7 +425,7 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
     return json(res, 200, { ok: true });
   }
-  if (!requireApiAccess(req, res)) return;
+  if (!requireApiSafety(req, res)) return;
   if (req.method === "GET" && url.pathname === "/api/projects") {
     return json(res, 200, { projects: await listProjects() });
   }
@@ -525,17 +519,6 @@ async function serveStatic(req, res, url) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://kiddo.local");
-    if (req.method === "GET" && url.pathname === "/pair") {
-      if (!safeEqual(url.searchParams.get("token") || "", PAIRING_TOKEN)) return json(res, 403, { error: "That pairing link is not valid." });
-      const secure = SECURE_COOKIE ? "; Secure" : "";
-      res.writeHead(303, browserSecurityHeaders({
-        location: "/",
-        "cache-control": "no-store",
-        "set-cookie": `kiddo_session=${encodeURIComponent(sessionValue(PAIRING_TOKEN))}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure}`
-      }));
-      res.end();
-      return;
-    }
     if (url.pathname.startsWith("/api/")) await handleApi(req, res, url);
     else await serveStatic(req, res, url);
   } catch (error) {
@@ -553,5 +536,4 @@ server.listen(PORT, HOST, () => {
   console.log(`Kiddo Programmer is ready.`);
   console.log(`On this Pi: http://localhost:${PORT}`);
   console.log(`On the iPad: http://<PI-IP>:${PORT}`);
-  if (!process.env.KIDDO_PAIRING_TOKEN) console.log(`Development pairing link: http://<PI-IP>:${PORT}/pair?token=${PAIRING_TOKEN}`);
 });

@@ -39,7 +39,7 @@ Every approved update becomes a local Git commit. Generated projects live separa
 
 Generated apps are self-contained HTML and run in a sandboxed, deny-by-default preview. Browser policy blocks network connections, external resources, form submissions, frames, and access to Kiddo Programmer. Coding agents have no command-line network access, receive a scrubbed environment, work only in a temporary project folder, and never run as root.
 
-Use Kiddo Programmer only on a trusted, WPA-protected home or classroom network with adult supervision. Do not expose port 3000 to the internet. Setup creates a private pairing link; a grown-up opens it once on each allowed iPad, and the browser then keeps an HttpOnly pairing cookie. Teach children not to enter names, addresses, school information, or other personal details in prompts.
+Use Kiddo Programmer only on a trusted, WPA-protected home network with adult supervision. There is no login: every device on that network can access the workshop. Do not use it on guest or untrusted Wi-Fi, and never expose port 3000 to the internet. Teach children not to enter names, addresses, school information, or other personal details in prompts.
 
 Conversation history is capped locally, excluded from Git, and can be removed by deleting the project's `chat.json` file. This self-hosted framework does not determine whether a particular home, school, or organization is legally covered by children's privacy law; deployers are responsible for parental notice, consent, retention, and provider choices. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
@@ -68,7 +68,7 @@ cd KiddoProgrammer
 ./install.sh
 ```
 
-The guided setup selects the coding agent, completes adult sign-in when needed, installs a hardened system service, enables startup at boot, and prints a private device-pairing link. Open that link once on each iPad you approve. Setup requests `sudo` only for service installation; the agents remain unprivileged.
+The guided setup selects the coding agent, completes adult sign-in when needed, installs a hardened system service, enables startup at boot, and prints the iPad address. Setup requests `sudo` only for service installation; the agents remain unprivileged.
 
 After the npm package is published, installation will be:
 
@@ -79,7 +79,7 @@ kiddo-programmer setup
 
 ### 3. Open it on the iPad
 
-Have a grown-up open the private pairing address printed by setup, such as `http://192.168.1.42:3000/pair?token=…`, in Safari. It immediately redirects to the clean project page. Then use **Share → Add to Home Screen** for an app-like icon. Do not share the pairing link.
+Open the address printed by setup, such as `http://192.168.1.42:3000`, in Safari. Then use **Share → Add to Home Screen** for an app-like icon.
 
 If the address changes, run `hostname -I` on the Pi or reserve the Pi's address in your router.
 
@@ -91,7 +91,6 @@ For an npm installation:
 kiddo-programmer status
 kiddo-programmer logs
 kiddo-programmer check
-kiddo-programmer pair   # print the private link for another iPad
 ```
 
 Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:

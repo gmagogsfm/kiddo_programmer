@@ -1,5 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-
 export const PREVIEW_CSP = [
   "default-src 'none'",
   "script-src 'unsafe-inline'",
@@ -31,32 +29,6 @@ export function securePreviewHtml(html) {
   const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}">`;
   if (/<head(?:\s[^>]*)?>/i.test(html)) return html.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${meta}`);
   return html.replace(/<!doctype html>/i, (doctype) => `${doctype}${meta}`);
-}
-
-function digest(value) {
-  return createHash("sha256").update(value).digest();
-}
-
-export function sessionValue(pairingToken) {
-  return digest(`kiddo-programmer-session:${pairingToken}`).toString("base64url");
-}
-
-export function safeEqual(left, right) {
-  const a = digest(String(left));
-  const b = digest(String(right));
-  return timingSafeEqual(a, b);
-}
-
-export function cookieValue(cookieHeader, name) {
-  for (const item of String(cookieHeader || "").split(";")) {
-    const [key, ...rest] = item.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
-  }
-  return "";
-}
-
-export function isAuthorized(cookieHeader, pairingToken) {
-  return safeEqual(cookieValue(cookieHeader, "kiddo_session"), sessionValue(pairingToken));
 }
 
 export function isSameOriginMutation(req) {

@@ -10,7 +10,6 @@ test("the packaged CLI exposes setup and check commands", async () => {
   const cli = await readFile(path.join(root, "bin/kiddo-programmer.mjs"), "utf8");
   assert.match(cli, /case "setup"/);
   assert.match(cli, /case "check"/);
-  assert.match(cli, /case "pair"/);
   assert.match(cli, /kiddo-programmer setup/);
 });
 
@@ -29,7 +28,6 @@ test("the service template contains no machine-specific home path", async () => 
   assert.match(template, /User=@KIDDO_USER@/);
   assert.match(template, /Environment=KIDDO_AGENT=@KIDDO_AGENT@/);
   assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_CODEX_HOME@/);
-  assert.match(template, /EnvironmentFile=@KIDDO_TOKEN_FILE@/);
   assert.match(template, /NoNewPrivileges=true/);
   assert.match(template, /CapabilityBoundingSet=/);
 });

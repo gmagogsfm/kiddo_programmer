@@ -10,7 +10,6 @@ User=@KIDDO_USER@
 Group=@KIDDO_GROUP@
 WorkingDirectory=@KIDDO_ROOT@
 EnvironmentFile=-@KIDDO_CONFIG@
-EnvironmentFile=@KIDDO_TOKEN_FILE@
 Environment=NODE_ENV=production
 Environment=KIDDO_AGENT=@KIDDO_AGENT@
 Environment=HOME=@KIDDO_HOME@
