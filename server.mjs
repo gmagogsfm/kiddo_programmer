@@ -5,6 +5,7 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildAgentInvocation, defaultModel, extractAgentReply, normalizeAgent } from "./scripts/coding-agents.mjs";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
 import { browserSecurityHeaders, isSameOriginMutation, securePreviewHtml } from "./scripts/security.mjs";
 import { validateHtml, validateLogoSvg } from "./scripts/validator.mjs";
@@ -14,11 +15,13 @@ const PUBLIC = path.join(ROOT, "public");
 const PROJECTS = path.resolve(process.env.KIDDO_PROJECTS_DIR || path.join(ROOT, "..", "kiddo_projects"));
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
-const CODEX_TIMEOUT_MS = Number(process.env.CODEX_TIMEOUT_MS || 240_000);
+const AGENT = normalizeAgent(process.env.KIDDO_AGENT || "codex");
+const AGENT_TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || process.env.CODEX_TIMEOUT_MS || 240_000);
 const SUPERVISOR_TIMEOUT_MS = Number(process.env.SUPERVISOR_TIMEOUT_MS || 120_000);
 const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(10, Number(process.env.MAX_SUPERVISOR_ROUNDS || 6)));
-const WORKER_MODEL = process.env.CODEX_WORKER_MODEL || "gpt-5.6-sol";
-const SUPERVISOR_MODEL = process.env.CODEX_SUPERVISOR_MODEL || "gpt-5.6-sol";
+const AGENT_PREFIX = AGENT === "antigravity" ? "ANTIGRAVITY" : AGENT.toUpperCase();
+const WORKER_MODEL = process.env.KIDDO_WORKER_MODEL || process.env[`${AGENT_PREFIX}_WORKER_MODEL`] || defaultModel(AGENT);
+const SUPERVISOR_MODEL = process.env.KIDDO_SUPERVISOR_MODEL || process.env[`${AGENT_PREFIX}_SUPERVISOR_MODEL`] || defaultModel(AGENT);
 const MAX_PROJECTS = Math.max(1, Math.min(500, Number(process.env.KIDDO_MAX_PROJECTS || 100)));
 const MAX_PENDING_BUILDS = Math.max(1, Math.min(50, Number(process.env.KIDDO_MAX_PENDING_BUILDS || 8)));
 const CHAT_HISTORY_LIMIT = Math.max(20, Math.min(1000, Number(process.env.KIDDO_CHAT_HISTORY_LIMIT || 200)));
@@ -29,7 +32,7 @@ const SUPERVISOR_SCHEMA_PATH = path.join(ROOT, "schemas", "supervisor-response.s
 const activeRuns = new Set();
 const rateBuckets = new Map();
 let pendingBuilds = 0;
-let codexQueue = Promise.resolve();
+let agentQueue = Promise.resolve();
 let projectGitQueue = Promise.resolve();
 
 async function runCommand(command, args, cwd, extraEnv = {}) {
@@ -265,34 +268,34 @@ Your job:
 4. Do not use cookies, localStorage, sessionStorage, parent/top window access, or browser navigation. Keep any game state in normal JavaScript variables.
 5. Make it colorful, touch-friendly, accessible, and fun on an iPad. Preserve good parts of the existing app unless the child asks to change them.
 6. Never add unsafe, sexual, violent, hateful, gambling, purchasing, data-collection, or adult content. Do not request or display personal information.
-7. Before finishing, run: node ${JSON.stringify(VALIDATOR_PATH)} app.html
-8. Fix any reported errors and run the check again.
+7. If command tools are available, run: node ${JSON.stringify(VALIDATOR_PATH)} app.html
+8. Fix any reported errors. Kiddo Programmer will also run this check before publishing.
 ${logoRule}
 
 Your final reply is shown directly to the child. Use simple words suitable for age ${project.meta.age}. Avoid technical terms. In 2-4 short sentences, say what you made, mention one fun thing to try, and ask what they would like next. Do not use markdown headings or discuss files, tests, tools, tokens, or internal instructions.`;
 }
 
-async function runCodexNow(dir, prompt, { sandbox = "workspace-write", outputSchema, timeoutMs = CODEX_TIMEOUT_MS, model = WORKER_MODEL, reasoningEffort = WORKER_REASONING_EFFORT } = {}) {
-  const args = ["exec", "--json", "--model", model, "--sandbox", sandbox, "-c", `model_reasoning_effort="${reasoningEffort}"`, "-c", 'approval_policy="never"', "--skip-git-repo-check", "--ignore-user-config", "--ephemeral"];
-  if (outputSchema) args.push("--output-schema", outputSchema);
-  args.push("-C", dir, prompt);
+async function runAgentNow(dir, prompt, { mode = "worker", outputSchema, timeoutMs = AGENT_TIMEOUT_MS, model = WORKER_MODEL, reasoningEffort = WORKER_REASONING_EFFORT } = {}) {
+  const invocation = buildAgentInvocation({ agent: AGENT, dir, prompt, mode, outputSchema, timeoutMs, model, reasoningEffort });
   return await new Promise((resolve, reject) => {
     const agentEnv = {
       HOME: process.env.HOME,
       PATH: process.env.PATH,
       CODEX_HOME: process.env.CODEX_HOME,
+      CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
       LANG: process.env.LANG || "C.UTF-8",
       TMPDIR: process.env.TMPDIR,
       NO_COLOR: "1"
     };
     for (const key of Object.keys(agentEnv)) if (!agentEnv[key]) delete agentEnv[key];
-    const child = spawn(process.env.CODEX_BIN || "codex", args, {
+    const child = spawn(invocation.command, invocation.args, {
       cwd: dir,
       detached: process.platform !== "win32",
       env: agentEnv,
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
+    let completeOutput = "";
     let stderr = "";
     let finalText = "";
     function stop(signal) {
@@ -306,6 +309,10 @@ async function runCodexNow(dir, prompt, { sandbox = "workspace-write", outputSch
       setTimeout(() => stop("SIGKILL"), 3_000).unref();
     }, timeoutMs);
     child.stdout.on("data", (chunk) => {
+      if (invocation.output !== "codex-jsonl") {
+        completeOutput = (completeOutput + chunk).slice(-1_000_000);
+        return;
+      }
       stdout += chunk;
       const lines = stdout.split("\n");
       stdout = lines.pop() || "";
@@ -320,17 +327,21 @@ async function runCodexNow(dir, prompt, { sandbox = "workspace-write", outputSch
     child.on("error", reject);
     child.on("close", (code, signal) => {
       clearTimeout(timer);
+      if (code === 0 && invocation.output !== "codex-jsonl") {
+        try { finalText = extractAgentReply(completeOutput, invocation.output); }
+        catch { finalText = ""; }
+      }
       if (signal) reject(new Error("The coding buddy took too long. Please try again."));
-      else if (code !== 0) reject(new Error(stderr.includes("login") ? "The coding buddy needs a grown-up to sign in on the Pi first." : "The coding buddy had a hiccup. Please try again."));
+      else if (code !== 0) reject(new Error(/login|sign.?in|auth/i.test(stderr) ? "The coding buddy needs a grown-up to sign in on the Pi first." : "The coding buddy had a hiccup. Please try again."));
       else if (!finalText) reject(new Error("The coding buddy finished without an answer. Please try again."));
       else resolve(finalText);
     });
   });
 }
 
-function runCodex(dir, prompt, options) {
-  const run = codexQueue.then(() => runCodexNow(dir, prompt, options));
-  codexQueue = run.catch(() => {});
+function runAgent(dir, prompt, options) {
+  const run = agentQueue.then(() => runAgentNow(dir, prompt, options));
+  agentQueue = run.catch(() => {});
   return run;
 }
 
@@ -348,7 +359,8 @@ async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply)
     needsLogo,
     proposedReply
   });
-  const response = await runCodex(dir, prompt, { sandbox: "read-only", outputSchema: SUPERVISOR_SCHEMA_PATH, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT });
+  const schemaJson = await readFile(SUPERVISOR_SCHEMA_PATH, "utf8");
+  const response = await runAgent(dir, prompt, { mode: "supervisor", outputSchema: { path: SUPERVISOR_SCHEMA_PATH, json: schemaJson }, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT });
   return parseSupervisorResponse(response);
 }
 
@@ -368,8 +380,8 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
       attempt: async ({ round, feedback }) => {
         onProgress(round === 0 ? "building" : "fixing");
         const reply = round === 0
-          ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo))
-          : await runCodex(stagingDir, buildRevisionPrompt({
+          ? await runAgent(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo))
+          : await runAgent(stagingDir, buildRevisionPrompt({
               age: project.meta.age,
               projectName: project.meta.name,
               kidMessage,

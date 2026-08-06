@@ -47,7 +47,9 @@ check_prerequisites() {
 choose_agent() {
   local choice
   say "Choose the coding agent that will build and review children's projects:"
-  say "  1) OpenAI Codex (supported)"
+  say "  1) OpenAI Codex"
+  say "  2) Anthropic Claude Code"
+  say "  3) Google Antigravity CLI"
   say ""
 
   if [[ -n "${KIDDO_AGENT:-}" ]]; then
@@ -63,7 +65,9 @@ choose_agent() {
 
   case "${choice,,}" in
     1|codex|openai-codex) selected_agent="codex" ;;
-    *) fail "That coding agent is not supported yet. Choose 1 for OpenAI Codex." ;;
+    2|claude|claude-code|anthropic) selected_agent="claude" ;;
+    3|agy|antigravity|google-antigravity) selected_agent="antigravity" ;;
+    *) fail "Choose 1 for Codex, 2 for Claude Code, or 3 for Antigravity CLI." ;;
   esac
 }
 
@@ -101,16 +105,43 @@ ensure_agent_ready() {
       codex login status >/dev/null 2>&1 || fail "Codex did not report a completed sign-in. Run setup again to retry."
       say "OpenAI Codex sign-in is complete."
       ;;
+    claude)
+      require_command claude "Claude Code is required. Install it with: npm install --global @anthropic-ai/claude-code"
+      if claude auth status >/dev/null 2>&1; then
+        say "Claude Code is already signed in."
+        return
+      fi
+      [[ -t 0 ]] || fail "Claude Code needs an interactive sign-in. Run 'kiddo-programmer setup' in a terminal."
+      say "Claude Code needs a grown-up to sign in. Follow the web address and code it shows."
+      claude auth login || fail "Claude Code sign-in did not finish. You can run setup again to retry."
+      claude auth status >/dev/null 2>&1 || fail "Claude Code did not report a completed sign-in."
+      say "Claude Code sign-in is complete."
+      ;;
+    antigravity)
+      require_command agy "Antigravity CLI is required. Install it with the official installer: curl -fsSL https://antigravity.google/cli/install.sh | bash"
+      if agy models >/dev/null 2>&1; then
+        say "Antigravity CLI is already signed in."
+        return
+      fi
+      [[ -t 0 ]] || fail "Antigravity CLI setup is interactive. Run 'kiddo-programmer setup' in a terminal."
+      say "Antigravity needs a grown-up to sign in and trust the project folder."
+      say "Complete its setup, then use /quit to return to Kiddo Programmer setup."
+      agy || fail "Antigravity setup did not finish. You can run setup again to retry."
+      agy models >/dev/null 2>&1 || fail "Antigravity did not report available models after setup."
+      say "Antigravity sign-in is complete."
+      ;;
     *) fail "No setup adapter exists for coding agent: $selected_agent" ;;
   esac
 }
 
 check_agent() {
-  require_command codex "Codex CLI is required. The npm package includes it; source installs can run: npm install --global @openai/codex"
-
-  if ! codex login status >/dev/null 2>&1; then
-    fail "Codex is not signed in. Run 'kiddo-programmer setup' to complete the guided sign-in."
-  fi
+  selected_agent="${KIDDO_AGENT:-codex}"
+  case "${selected_agent,,}" in
+    codex) require_command codex "Codex CLI is required."; codex login status >/dev/null 2>&1 || fail "Codex is not signed in. Run 'kiddo-programmer setup'." ;;
+    claude) require_command claude "Claude Code is required."; claude auth status >/dev/null 2>&1 || fail "Claude Code is not signed in. Run 'kiddo-programmer setup'." ;;
+    antigravity) require_command agy "Antigravity CLI is required."; agy models >/dev/null 2>&1 || fail "Antigravity is not ready. Run 'kiddo-programmer setup'." ;;
+    *) fail "Unsupported KIDDO_AGENT: $selected_agent" ;;
+  esac
 }
 
 print_check() {
@@ -120,7 +151,7 @@ print_check() {
   pi_ip="$(first_ip || true)"
   say "Kiddo Programmer prerequisites look good."
   say "Node:  $(node --version) ($(command -v node))"
-  say "Codex: $(codex --version 2>/dev/null | head -n 1) ($(command -v codex))"
+  say "Agent: $selected_agent ($(command -v "${selected_agent/antigravity/agy}" 2>/dev/null || true))"
   if [[ -n "$pi_ip" ]]; then
     say "Expected iPad address: http://$pi_ip:${PORT:-3000}"
   fi
@@ -136,10 +167,11 @@ render_service() {
   rendered="${rendered//@KIDDO_AGENT@/$selected_agent}"
   rendered="${rendered//@KIDDO_HOME@/$install_home}"
   rendered="${rendered//@KIDDO_BIN_PATH@/$bin_path}"
-  rendered="${rendered//@KIDDO_CODEX_BIN@/$codex_bin}"
+  rendered="${rendered//@KIDDO_AGENT_BIN@/$agent_bin}"
   rendered="${rendered//@KIDDO_NODE_BIN@/$node_bin}"
   rendered="${rendered//@KIDDO_PROJECTS_DIR@/$projects_dir}"
-  rendered="${rendered//@KIDDO_CODEX_HOME@/$codex_home}"
+  rendered="${rendered//@KIDDO_AGENT_STATE_DIR@/$agent_state_dir}"
+  rendered="${rendered//@KIDDO_AGENT_STATE_EXTRA@/$agent_state_extra}"
   printf '%s\n' "$rendered"
 }
 
@@ -151,12 +183,27 @@ write_default_config() {
     printf 'HOST=0.0.0.0\n'
     printf 'KIDDO_PROJECTS_DIR="%s"\n' "$projects_dir"
     printf 'KIDDO_AGENT=%s\n' "$selected_agent"
-    printf 'CODEX_WORKER_MODEL=gpt-5.6-sol\n'
-    printf 'CODEX_SUPERVISOR_MODEL=gpt-5.6-sol\n'
-    printf 'CODEX_TIMEOUT_MS=240000\n'
+    printf 'KIDDO_WORKER_MODEL="%s"\n' "$selected_model"
+    printf 'KIDDO_SUPERVISOR_MODEL="%s"\n' "$selected_model"
+    printf 'AGENT_TIMEOUT_MS=240000\n'
     printf 'SUPERVISOR_TIMEOUT_MS=120000\n'
     printf 'MAX_SUPERVISOR_ROUNDS=6\n'
   } > "$temporary_config"
+}
+
+update_selected_agent_in_config() {
+  local temporary_config="$1"
+  sudo awk -v selected="$selected_agent" '
+    BEGIN { replaced = 0 }
+    /^KIDDO_AGENT=/ {
+      if (!replaced) print "KIDDO_AGENT=" selected
+      replaced = 1
+      next
+    }
+    { print }
+    END { if (!replaced) print "KIDDO_AGENT=" selected }
+  ' "$CONFIG_FILE" > "$temporary_config"
+  sudo install -o root -g root -m 0600 "$temporary_config" "$CONFIG_FILE"
 }
 
 install_service() {
@@ -172,21 +219,40 @@ install_service() {
   install_group="$(id -gn)"
   install_home="${HOME:?HOME is not set}"
   node_bin="$(command -v node)"
-  codex_bin="$(command -v codex)"
-  codex_home="${CODEX_HOME:-$install_home/.codex}"
+  case "$selected_agent" in
+    codex)
+      agent_bin="$(command -v codex)"
+      agent_state_dir="${CODEX_HOME:-$install_home/.codex}"
+      agent_state_extra="$agent_state_dir"
+      selected_model="gpt-5.6-sol"
+      ;;
+    claude)
+      agent_bin="$(command -v claude)"
+      agent_state_dir="${CLAUDE_CONFIG_DIR:-$install_home/.claude}"
+      agent_state_extra="$install_home/.claude.json"
+      selected_model="sonnet"
+      ;;
+    antigravity)
+      agent_bin="$(command -v agy)"
+      agent_state_dir="$install_home/.gemini"
+      agent_state_extra="$agent_state_dir"
+      selected_model="gemini-3.6-flash-low"
+      ;;
+  esac
   projects_dir="${KIDDO_PROJECTS_DIR:-$install_home/kiddo_projects}"
-  bin_path="$(dirname "$codex_bin"):$(dirname "$node_bin"):/usr/local/bin:/usr/bin:/bin"
+  bin_path="$(dirname "$agent_bin"):$(dirname "$node_bin"):/usr/local/bin:/usr/bin:/bin"
 
   validate_path "The installation directory" "$SCRIPT_DIR"
   validate_path "The home directory" "$install_home"
   validate_path "The projects directory" "$projects_dir"
-  validate_path "The Codex directory" "$codex_home"
+  validate_path "The agent state directory" "$agent_state_dir"
+  validate_path "The agent state path" "$agent_state_extra"
   validate_path "The Node.js executable path" "$node_bin"
-  validate_path "The Codex executable path" "$codex_bin"
+  validate_path "The coding-agent executable path" "$agent_bin"
 
   mkdir -p -- "$projects_dir"
   [[ -w "$projects_dir" ]] || fail "The projects directory is not writable: $projects_dir"
-  [[ -r "$codex_home" ]] || fail "The Codex login directory is missing: $codex_home"
+  [[ -r "$agent_state_dir" ]] || fail "The coding-agent login directory is missing: $agent_state_dir"
 
   local temporary_dir temporary_service temporary_config
   temporary_dir="$(mktemp -d)"
@@ -200,8 +266,8 @@ install_service() {
     sudo install -o root -g root -m 0600 "$temporary_config" "$CONFIG_FILE"
     say "Created settings: $CONFIG_FILE"
   else
-    say "Kept existing settings: $CONFIG_FILE"
-    sudo chmod 0600 "$CONFIG_FILE"
+    update_selected_agent_in_config "$temporary_config"
+    say "Kept existing settings and selected $selected_agent: $CONFIG_FILE"
   fi
 
   sudo install -o root -g root -m 0644 "$temporary_service" "$SERVICE_FILE"
@@ -232,7 +298,7 @@ case "${1:-install}" in
     say "Usage: ./install.sh [install|--check|--help]"
     say ""
     say "  install  Install or update the system service (default)."
-    say "  --check  Check Node, Git, Codex, sign-in, and show the expected URL."
+    say "  --check  Check Node, Git, the selected agent, sign-in, and the expected URL."
     ;;
   *) fail "Unknown option: $1. Run ./install.sh --help." ;;
 esac

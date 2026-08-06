@@ -17,9 +17,12 @@ test("setup owns coding-agent selection and authentication", async () => {
   const installer = await readFile(path.join(root, "install.sh"), "utf8");
   assert.match(installer, /Choose the coding agent/);
   assert.match(installer, /codex login --device-auth/);
+  assert.match(installer, /claude auth login/);
+  assert.match(installer, /agy models/);
   assert.match(installer, /ensure_agent_ready/);
   assert.match(installer, /confirm_provider_data_use/);
   assert.match(installer, /KIDDO_AGENT/);
+  assert.match(installer, /update_selected_agent_in_config/);
 });
 
 test("the service template contains no machine-specific home path", async () => {
@@ -27,7 +30,8 @@ test("the service template contains no machine-specific home path", async () => 
   assert.doesNotMatch(template, /\/home\/gmagogsfm/);
   assert.match(template, /User=@KIDDO_USER@/);
   assert.match(template, /Environment=KIDDO_AGENT=@KIDDO_AGENT@/);
-  assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_CODEX_HOME@/);
+  assert.match(template, /Environment=KIDDO_AGENT_BIN=@KIDDO_AGENT_BIN@/);
+  assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_AGENT_STATE_DIR@/);
   assert.match(template, /NoNewPrivileges=true/);
   assert.match(template, /CapabilityBoundingSet=/);
 });

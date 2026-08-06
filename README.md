@@ -9,7 +9,7 @@ Everything Kiddo Programmer owns runs on your Raspberry Pi:
 - There is no Kiddo Programmer cloud account, subscription, tracking, or advertising.
 - The framework is free to use under the Apache-2.0 license.
 
-AI generation uses the adult's own supported coding-agent account. OpenAI Codex is currently supported, so the adult needs an eligible ChatGPT subscription or API billing. The child's current request, age, and recent conversation context are sent to that provider to build and review the app; its terms and privacy practices apply.
+AI generation uses the adult's own supported coding-agent account. Choose OpenAI Codex, Anthropic Claude Code, or Google Antigravity CLI during setup. The child's current request, age, and recent conversation context are sent to that provider to build and review the app; its terms and privacy practices apply.
 
 ## See it in action
 
@@ -46,7 +46,7 @@ Conversation history is capped locally, excluded from Git, and can be removed by
 
 ## Raspberry Pi setup
 
-You need 64-bit Raspberry Pi OS, an iPad on the same Wi-Fi, and an adult-owned Codex account.
+You need 64-bit Raspberry Pi OS, an iPad on the same Wi-Fi, and an adult-owned account for one supported coding agent.
 
 ### 1. Install the basic tools
 
@@ -62,8 +62,22 @@ Node.js 20 or newer is required. If the version is older, install a current LTS 
 
 The npm package is prepared but not published yet. Install from GitHub for now:
 
+Install the agent you plan to use first:
+
 ```bash
+# OpenAI Codex
 npm install --global @openai/codex
+
+# Anthropic Claude Code
+npm install --global @anthropic-ai/claude-code
+
+# Google Antigravity CLI
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+```
+
+Then install Kiddo Programmer:
+
+```bash
 git clone https://github.com/gmagogsfm/KiddoProgrammer.git
 cd KiddoProgrammer
 ./install.sh
@@ -99,6 +113,8 @@ Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:
 ```bash
 sudo systemctl restart kiddo-programmer
 ```
+
+`KIDDO_AGENT` accepts `codex`, `claude`, or `antigravity`. Setup writes explicit worker and supervisor models. Defaults are `gpt-5.6-sol` for Codex, the current `sonnet` alias with low effort for Claude, and `gemini-3.6-flash-low` for Antigravity.
 
 Projects default to `~/kiddo_projects`. Back up that folder only to storage the parent controls. Conversation files are excluded from Git commits but are included in a full-folder backup.
 
