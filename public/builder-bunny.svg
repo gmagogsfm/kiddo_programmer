@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 150" role="img" aria-labelledby="title desc">
+  <title id="title">Builder Bunny</title>
+  <desc id="desc">A cheerful purple bunny running with a yellow tool bag.</desc>
+  <g stroke="#3f315f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#b7a1ff" d="M78 54C62 36 58 8 70 6c13-2 22 28 22 46z"/>
+    <path fill="#d3c7ff" d="M91 50c-2-23 11-48 23-43 12 6 3 36-9 51z"/>
+    <path fill="#fff" d="M49 80c7-28 35-42 62-32 26 10 38 37 24 61-14 24-50 28-73 12-16-11-20-25-13-41z"/>
+    <circle cx="116" cy="77" r="5" fill="#3f315f" stroke="none"/>
+    <path fill="none" d="M129 89c-7 7-15 7-22 1"/>
+    <path fill="#ff8f9f" d="m130 83 8 4-8 5z" stroke-width="4"/>
+    <path fill="#fff" d="M60 99c-19 2-34 12-41 28 21 4 39 0 53-12"/>
+    <path fill="#fff" d="M112 112c15 3 29 11 39 25-19 5-36 0-48-11"/>
+    <circle cx="47" cy="95" r="17" fill="#fff"/>
+    <path fill="#ffd75c" d="M71 104h43l8 35H62z"/>
+    <path fill="none" d="M77 104c1-18 28-18 30 0"/>
+    <path fill="#6cd7c8" d="m79 118 10-7 8 8-9 8z" stroke-width="4"/>
+  </g>
+</svg>

@@ -90,8 +90,22 @@
     .cancel { padding:12px 16px; border:0; border-radius:13px; color:var(--muted); background:#efedf3; font-weight:750; cursor:pointer; }
     .toast { position:fixed; z-index:5; left:50%; bottom:22px; transform:translate(-50%,140px); max-width:min(90vw,560px); padding:12px 17px; border-radius:12px; color:white; background:#8a2d32; box-shadow:var(--shadow); transition:.25s; font-weight:700; text-align:center; }
     .toast.show { transform:translate(-50%,0); }
+    .build-bunny { position:absolute; z-index:3; right:22px; bottom:22px; width:min(310px,calc(100% - 44px)); display:grid; grid-template-columns:94px 1fr; align-items:center; gap:10px; padding:13px 16px 13px 10px; border:2px solid rgba(108,76,255,.18); border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 14px 36px rgba(61,45,95,.2); }
+    .build-bunny[hidden] { display:none; }
+    .bunny-stage { position:relative; height:82px; display:grid; place-items:center; }
+    .bunny-stage img { width:94px; height:78px; object-fit:contain; transform-origin:50% 90%; animation:bunny-hop .9s ease-in-out infinite; }
+    .bunny-shadow { position:absolute; left:25px; bottom:1px; width:48px; height:9px; border-radius:50%; background:rgba(63,49,95,.18); animation:bunny-shadow .9s ease-in-out infinite; }
+    .bunny-copy strong { display:block; color:#3f315f; font-size:1.02rem; line-height:1.25; }
+    .bunny-copy span { display:block; margin-top:5px; color:var(--muted); font-size:.86rem; line-height:1.35; }
+    .bunny-dots { display:flex; gap:5px; margin-top:9px; }
+    .bunny-dots i { width:7px; height:7px; border-radius:50%; background:#b9ade4; animation:bunny-dot 1.2s infinite; }
+    .bunny-dots i:nth-child(2) { animation-delay:.18s; } .bunny-dots i:nth-child(3) { animation-delay:.36s; }
     @keyframes pop { from { opacity:0; transform:translateY(5px); } }
     @keyframes bounce { 50% { transform:translateY(-4px); } }
+    @keyframes bunny-hop { 0%,100% { transform:translateY(2px) rotate(-2deg); } 48% { transform:translateY(-14px) rotate(4deg); } }
+    @keyframes bunny-shadow { 0%,100% { transform:scaleX(1); opacity:.7; } 48% { transform:scaleX(.58); opacity:.35; } }
+    @keyframes bunny-dot { 0%,70%,100% { transform:scale(.75); opacity:.45; } 35% { transform:scale(1.15); opacity:1; } }
+    @media (prefers-reduced-motion:reduce) { .bunny-stage img,.bunny-shadow,.bunny-dots i { animation:none; } }
     @media (max-width:760px) { body { overflow:auto; } .shell { height:auto; min-height:100dvh; grid-template-columns:1fr; grid-template-rows:minmax(52dvh,560px) minmax(48dvh,600px); } }
   </style>
 </head>
@@ -104,6 +118,7 @@
       </header>
       <div class="preview-wrap">
         <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-modals allow-pointer-lock" referrerpolicy="no-referrer" hidden></iframe>
+        <div class="build-bunny" id="buildBunny" role="status" aria-live="polite" hidden><div class="bunny-stage"><span class="bunny-shadow"></span><img src="/builder-bunny.svg" alt=""></div><div class="bunny-copy"><strong id="bunnyTitle">Building your idea…</strong><span id="bunnyDetail">Builder Bunny is getting everything ready.</span><div class="bunny-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div>
         <div class="empty" id="empty"><div class="empty-card"><div class="empty-art">🪄</div><h1>Make an app with your ideas</h1><p>Choose a project on the right, or create a new one to begin.</p><button class="primary" id="emptyCreate">Choose a project</button></div></div>
       </div>
     </section>
@@ -143,9 +158,20 @@
       if (!response.ok) throw new Error(value.error || "Something got stuck. Your app is safe, so please try again.");
       return value;
     }
+    async function apiStream(url, options, onProgress) {
+      let response;
+      try { response=await fetch(url,{...options,headers:{"content-type":"application/json",...(options.headers||{})}}); }
+      catch { throw new Error("I can't reach the Raspberry Pi right now. Ask a grown-up to check that it is running, then try again."); }
+      if(!response.ok){const value=await response.json().catch(()=>({}));throw new Error(value.error||"Something got stuck. Your app is safe, so please try again.");}
+      const reader=response.body.getReader();const decoder=new TextDecoder();let buffer="";let result=null;
+      while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const event=JSON.parse(line);if(event.type==="progress")onProgress(event.stage);if(event.type==="complete")result=event.result;if(event.type==="error")throw new Error(event.error);}if(done)break;}
+      if(!result)throw new Error("The coding buddy finished without an answer. Please try again.");
+      return result;
+    }
     function toast(text) { $("toast").textContent = text; $("toast").classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => $("toast").classList.remove("show"), 7000); }
     function setStatus(kind="ready") { const values={ready:["#29a66f","Ready"],busy:["#f2a93b","Building & checking…"],error:["#d65059","Please try again"]};const [color,label]=values[kind];$("status").innerHTML=`<span class="dot" style="background:${color}"></span><span>${label}</span>`; }
-    function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("messageInput").disabled=value; $("projectSelect").disabled=value; $("newProject").disabled=value; $("backProjects").disabled=value; if(value)setStatus("busy"); }
+    function setBuildStage(stage) { const stages={building:["Building your idea…","Builder Bunny is putting the pieces together."],checking:["Checking every button…","Making sure the app works when you tap and play."],reviewing:["Giving it a careful look…","Checking that everything is fun, clear, and safe."],fixing:["Fixing a little wobble…","Builder Bunny found something to make better."],finishing:["Adding the final sparkle…","Your new version is almost ready."],saving:["Tucking it safely away…","Saving the working version for next time."]};const [title,detail]=stages[stage]||stages.building;$("bunnyTitle").textContent=title;$("bunnyDetail").textContent=detail;$("buildBunny").hidden=false;const thinking=$("thinking")?.querySelector(".bubble");if(thinking)thinking.textContent=title; }
+    function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("messageInput").disabled=value; $("projectSelect").disabled=value; $("newProject").disabled=value; $("backProjects").disabled=value; if(value){setStatus("busy");setBuildStage("building");}else{$("buildBunny").hidden=true;} }
     function renderMessages(messages) { $("messages").innerHTML=""; for (const message of messages) addMessage(message.role, message.text); }
     function addMessage(role, text, id="") { const row=document.createElement("div"); row.className=`message ${role}`; if(id) row.id=id; const bubble=document.createElement("div"); bubble.className="bubble"; bubble.textContent=text; row.append(bubble); $("messages").append(row); $("messages").scrollTop=$("messages").scrollHeight; }
     function renderProjectList(projects) { $("projectList").innerHTML=""; if(!projects.length){const empty=document.createElement("div");empty.className="project-list-empty";empty.textContent="No projects yet. Create one and start imagining!";$("projectList").append(empty);return;} for(const project of projects){const card=document.createElement("button");card.className="project-card";card.type="button";const icon=document.createElement("span");icon.className="project-icon";if(project.hasLogo){const image=document.createElement("img");image.src=`/api/projects/${project.id}/logo?v=${encodeURIComponent(project.updatedAt)}`;image.alt="";image.addEventListener("error",()=>{icon.textContent="🚀";},{once:true});icon.append(image);}else{icon.textContent="🚀";}const copy=document.createElement("span");copy.className="project-card-copy";const name=document.createElement("strong");name.textContent=project.name;const age=document.createElement("small");age.textContent=`Maker age ${project.age}`;const arrow=document.createElement("span");arrow.className="project-arrow";arrow.textContent="›";copy.append(name,age);card.append(icon,copy,arrow);card.addEventListener("click",()=>loadProject(project.id));$("projectList").append(card);} }
@@ -161,7 +187,7 @@
     $("createForm").addEventListener("submit",async(e)=>{e.preventDefault();const submitter=e.submitter;if(submitter?.value==="cancel"){ $("createDialog").close();return;}if(!e.currentTarget.reportValidity())return;const error=$("createError");const button=$("createSubmit");error.hidden=true;button.disabled=true;button.textContent="Creating…";try{const project=await api("/api/projects",{method:"POST",body:JSON.stringify({name:$("newName").value,age:Number($("newAge").value)})});$("createDialog").close();$("newName").value="";await refreshProjects(project.meta.id);renderProject(project);setStatus("ready");$("messageInput").focus();}catch(err){error.textContent=err.message;error.hidden=false;}finally{button.disabled=false;button.textContent="Create project";}});
     $("messageInput").addEventListener("input",()=>{$("messageInput").style.height="auto";$("messageInput").style.height=`${Math.min($("messageInput").scrollHeight,120)}px`;});
     $("messageInput").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
-    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";addMessage("thinking","Thinking ","thinking");$("thinking").querySelector(".bubble").innerHTML='Thinking <span class="thinking-dots"><span>•</span><span>•</span><span>•</span></span>';setBusy(true);try{const result=await api(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})});$("thinking")?.remove();addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);setStatus("ready");}catch(err){$("thinking")?.remove();addMessage("buddy",`${err.message} I put your idea back in the box so you can tap send again.`);$("messageInput").value=text;$("messageInput").dispatchEvent(new Event("input"));setStatus("error");toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
+    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";addMessage("thinking","Building your idea…","thinking");setBusy(true);try{const result=await apiStream(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})},setBuildStage);$("thinking")?.remove();addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);setStatus("ready");}catch(err){$("thinking")?.remove();addMessage("buddy",`${err.message} I put your idea back in the box so you can tap send again.`);$("messageInput").value=text;$("messageInput").dispatchEvent(new Event("input"));setStatus("error");toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
 
     async function start(){try{await refreshProjects();showProjectHome();setStatus("ready");}catch(e){setStatus("error");toast(e.message);$("projectList").innerHTML="";const box=document.createElement("div");box.className="project-list-empty";box.textContent=e.message;const retry=document.createElement("button");retry.className="retry";retry.type="button";retry.textContent="Try again";retry.addEventListener("click",start);box.append(document.createElement("br"),retry);$("projectList").append(box);}}
     start();

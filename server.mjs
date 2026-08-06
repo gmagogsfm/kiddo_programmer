@@ -143,6 +143,18 @@ function requireApiSafety(req, res) {
   return true;
 }
 
+function startEventStream(res) {
+  res.writeHead(200, browserSecurityHeaders({
+    "content-type": "application/x-ndjson; charset=utf-8",
+    "cache-control": "no-store",
+    "x-accel-buffering": "no"
+  }));
+}
+
+function streamEvent(res, value) {
+  if (!res.writableEnded) res.write(`${JSON.stringify(value)}\n`);
+}
+
 async function bodyJson(req) {
   const chunks = [];
   let size = 0;
@@ -340,7 +352,7 @@ async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply)
   return parseSupervisorResponse(response);
 }
 
-async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
+async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgress = () => {}) {
   const stagingDir = await mkdtemp(path.join(tmpdir(), "kiddo-build-"));
   const liveAppFile = path.join(dir, "app.html");
   const liveLogoFile = path.join(dir, "logo.svg");
@@ -354,6 +366,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
     const outcome = await repeatUntilApproved({
       maxRounds: MAX_SUPERVISOR_ROUNDS,
       attempt: async ({ round, feedback }) => {
+        onProgress(round === 0 ? "building" : "fixing");
         const reply = round === 0
           ? await runCodex(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo))
           : await runCodex(stagingDir, buildRevisionPrompt({
@@ -365,6 +378,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
               needsLogo
             }));
 
+        onProgress("checking");
         const html = await readFile(stagedAppFile, "utf8").catch(() => "");
         const logo = needsLogo ? await readFile(stagedLogoFile, "utf8").catch(() => "") : null;
         const appValidation = validateHtml(html);
@@ -381,12 +395,14 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
             checks: ["Deterministic HTML and JavaScript validation failed."]
           };
         } else {
+          onProgress("reviewing");
           lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo, reply);
         }
         return { html, logo, reply, validation, review: lastReview };
       }
     });
     if (outcome.approved) {
+      onProgress("finishing");
       const publishFile = `${liveAppFile}.${randomUUID()}.tmp`;
       await writeFile(publishFile, outcome.html);
       if (needsLogo) {
@@ -476,6 +492,8 @@ async function handleApi(req, res, url) {
       const input = await bodyJson(req);
       const message = String(input.message || "").trim().slice(0, 2000);
       if (!message) return json(res, 400, { error: "Type an idea first." });
+      startEventStream(res);
+      streamEvent(res, { type: "progress", stage: "building" });
       const project = await readProject(id);
       const dir = await existingProjectDir(id);
       const oldHtml = project.html;
@@ -483,7 +501,7 @@ async function handleApi(req, res, url) {
       project.messages.push(kidEntry);
       if (project.messages.length > CHAT_HISTORY_LIMIT) project.messages.splice(0, project.messages.length - CHAT_HISTORY_LIMIT);
       await saveJson(path.join(dir, "chat.json"), project.messages);
-      const result = await buildWithSupervision(dir, project, message, oldHtml);
+      const result = await buildWithSupervision(dir, project, message, oldHtml, (stage) => streamEvent(res, { type: "progress", stage }));
       const { html, reply, validation, review } = result;
       const buddyEntry = { id: randomUUID(), role: "buddy", text: reply.trim(), at: new Date().toISOString() };
       project.messages.push(buddyEntry);
@@ -493,10 +511,22 @@ async function handleApi(req, res, url) {
         saveJson(path.join(dir, "chat.json"), project.messages),
         saveJson(path.join(dir, "project.json"), project.meta)
       ]);
-      const versionControl = result.published
-        ? await recordProjectVersion(project.meta, "update", review)
-        : { committed: false, pushed: false, owner: "supervisor" };
-      return json(res, 200, { html: securePreviewHtml(html), message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl });
+      let versionControl = { committed: false, pushed: false, owner: "supervisor" };
+      if (result.published) {
+        streamEvent(res, { type: "progress", stage: "saving" });
+        versionControl = await recordProjectVersion(project.meta, "update", review);
+      }
+      streamEvent(res, { type: "complete", result: { html: securePreviewHtml(html), message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl } });
+      res.end();
+      return;
+    } catch (error) {
+      if (res.headersSent) {
+        console.error("Streamed build failed:", error.message);
+        streamEvent(res, { type: "error", error: "Something got stuck on the Raspberry Pi. Your app is safe. Please try again." });
+        res.end();
+        return;
+      }
+      throw error;
     } finally {
       pendingBuilds -= 1;
       activeRuns.delete(id);
@@ -510,7 +540,7 @@ async function serveStatic(req, res, url) {
   if (!/^[a-zA-Z0-9._-]+$/.test(file)) return json(res, 404, { error: "Not found." });
   try {
     const body = await readFile(path.join(PUBLIC, file));
-    const type = file.endsWith(".html") ? "text/html; charset=utf-8" : file.endsWith(".css") ? "text/css; charset=utf-8" : "application/javascript; charset=utf-8";
+    const type = file.endsWith(".html") ? "text/html; charset=utf-8" : file.endsWith(".css") ? "text/css; charset=utf-8" : file.endsWith(".svg") ? "image/svg+xml; charset=utf-8" : "application/javascript; charset=utf-8";
     res.writeHead(200, browserSecurityHeaders({ "content-type": type, "content-length": body.length, "cache-control": "no-cache" }));
     res.end(body);
   } catch { json(res, 404, { error: "Not found." }); }
