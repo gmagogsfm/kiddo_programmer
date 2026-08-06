@@ -29,6 +29,7 @@ Usage: kiddo-programmer <command>
 Commands:
   setup     Choose an agent, sign in, and install or update the Pi service
   check     Check Node, Git, Codex sign-in, and show the expected iPad URL
+  pair      Print the private iPad pairing link for a grown-up
   start     Run the server in this terminal (development use)
   status    Show whether the installed service is running
   logs      Show recent messages from the installed service
@@ -50,6 +51,9 @@ switch (command) {
     break;
   case "check":
     run("bash", [path.join(packageRoot, "install.sh"), "--check"]);
+    break;
+  case "pair":
+    run("bash", [path.join(packageRoot, "install.sh"), "--pair"]);
     break;
   case "start":
     run(process.execPath, [path.join(packageRoot, "server.mjs")]);

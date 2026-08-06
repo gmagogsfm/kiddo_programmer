@@ -10,6 +10,7 @@ User=@KIDDO_USER@
 Group=@KIDDO_GROUP@
 WorkingDirectory=@KIDDO_ROOT@
 EnvironmentFile=-@KIDDO_CONFIG@
+EnvironmentFile=@KIDDO_TOKEN_FILE@
 Environment=NODE_ENV=production
 Environment=KIDDO_AGENT=@KIDDO_AGENT@
 Environment=HOME=@KIDDO_HOME@
@@ -20,8 +21,20 @@ Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=read-only
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_CODEX_HOME@
 UMask=0077
 

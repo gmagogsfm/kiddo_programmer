@@ -1,6 +1,6 @@
 {
   "name": "kiddo-programmer",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "type": "module",
   "description": "A Raspberry Pi powered, kid-friendly web app builder.",
   "license": "Apache-2.0",
@@ -17,6 +17,7 @@
     "README.md",
     "LICENSE",
     "NOTICE",
+    "SECURITY.md",
     "server.mjs",
     "install.sh"
   ],
@@ -34,7 +35,7 @@
     "codex"
   ],
   "dependencies": {
-    "@openai/codex": "^0.146.0"
+    "@openai/codex": "0.146.0"
   },
   "scripts": {
     "start": "node server.mjs",

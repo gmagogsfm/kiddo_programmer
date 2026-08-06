@@ -16,12 +16,14 @@ test("rejects malformed supervisor output", () => {
   assert.throws(() => parseSupervisorResponse('{"verdict":"maybe","feedback":"Unsure","checks":[],"commitMessage":"Review app"}'), /invalid verdict/);
 });
 
-test("supervisor prompt is read-only and includes the request", () => {
-  const prompt = buildSupervisorPrompt({ age: 9, projectName: "Stars", kidMessage: "Add a timer", history: "", validatorPath: "/validator.mjs" });
+test("supervisor prompt reviews both the app and the proposed child-facing reply", () => {
+  const prompt = buildSupervisorPrompt({ age: 9, projectName: "Stars", kidMessage: "Add a timer", history: "", validatorPath: "/validator.mjs", proposedReply: "I added your timer!" });
   assert.match(prompt, /Do not edit, create, or delete/);
   assert.match(prompt, /Add a timer/);
   assert.match(prompt, /validator\.mjs/);
   assert.match(prompt, /version gatekeeper/);
+  assert.match(prompt, /I added your timer!/);
+  assert.match(prompt, /review the proposed reply/i);
 });
 
 test("revision prompt passes supervisor feedback to the worker", () => {

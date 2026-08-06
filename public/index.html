@@ -103,7 +103,7 @@
         <div class="status" id="status"><span class="dot"></span><span>Ready</span></div>
       </header>
       <div class="preview-wrap">
-        <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock" hidden></iframe>
+        <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-modals allow-pointer-lock" referrerpolicy="no-referrer" hidden></iframe>
         <div class="empty" id="empty"><div class="empty-card"><div class="empty-art">🪄</div><h1>Make an app with your ideas</h1><p>Choose a project on the right, or create a new one to begin.</p><button class="primary" id="emptyCreate">Choose a project</button></div></div>
       </div>
     </section>
@@ -121,7 +121,7 @@
         <div class="messages" id="messages" aria-live="polite"></div>
         <form class="composer" id="chatForm">
           <div class="input-row"><textarea id="messageInput" rows="1" maxlength="2000" placeholder="Tell me anything you want to create…"></textarea><button class="send" id="send" aria-label="Send message">➤</button></div>
-          <div class="hint" id="hint">Type your idea, then tap send</div>
+          <div class="hint" id="hint">Type your idea—leave out names, schools, and private information</div>
         </form>
       </section>
     </aside>
@@ -150,7 +150,7 @@
     function addMessage(role, text, id="") { const row=document.createElement("div"); row.className=`message ${role}`; if(id) row.id=id; const bubble=document.createElement("div"); bubble.className="bubble"; bubble.textContent=text; row.append(bubble); $("messages").append(row); $("messages").scrollTop=$("messages").scrollHeight; }
     function renderProjectList(projects) { $("projectList").innerHTML=""; if(!projects.length){const empty=document.createElement("div");empty.className="project-list-empty";empty.textContent="No projects yet. Create one and start imagining!";$("projectList").append(empty);return;} for(const project of projects){const card=document.createElement("button");card.className="project-card";card.type="button";const icon=document.createElement("span");icon.className="project-icon";if(project.hasLogo){const image=document.createElement("img");image.src=`/api/projects/${project.id}/logo?v=${encodeURIComponent(project.updatedAt)}`;image.alt="";image.addEventListener("error",()=>{icon.textContent="🚀";},{once:true});icon.append(image);}else{icon.textContent="🚀";}const copy=document.createElement("span");copy.className="project-card-copy";const name=document.createElement("strong");name.textContent=project.name;const age=document.createElement("small");age.textContent=`Maker age ${project.age}`;const arrow=document.createElement("span");arrow.className="project-arrow";arrow.textContent="›";copy.append(name,age);card.append(icon,copy,arrow);card.addEventListener("click",()=>loadProject(project.id));$("projectList").append(card);} }
     function showProjectHome() { $("chatWorkspace").hidden=true; $("projectHome").hidden=false; }
-    function renderProject(project) { currentProject=project; $("projectHome").hidden=true; $("chatWorkspace").hidden=false; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("hint").textContent="Type your idea, then tap send"; $("projectSelect").value=project.meta.id; }
+    function renderProject(project) { currentProject=project; $("projectHome").hidden=true; $("chatWorkspace").hidden=false; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("hint").textContent="Leave out names, schools, and private information"; $("projectSelect").value=project.meta.id; }
     async function refreshProjects(selectId) { const {projects}=await api("/api/projects"); renderProjectList(projects); $("projectSelect").innerHTML='<option value="">Switch project…</option>'; for(const p of projects){const o=document.createElement("option");o.value=p.id;o.textContent=p.name;$("projectSelect").append(o);} if(selectId) $("projectSelect").value=selectId; return projects; }
     async function loadProject(id) { if(!id)return; try { renderProject(await api(`/api/projects/${id}`));setStatus("ready"); } catch(e){setStatus("error");toast(e.message);} }
     $("projectSelect").addEventListener("change", (e)=>loadProject(e.target.value));

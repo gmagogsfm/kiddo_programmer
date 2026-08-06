@@ -20,7 +20,7 @@ export async function repeatUntilApproved({ maxRounds, attempt }) {
   return { approved: false, ...lastResult };
 }
 
-export function buildSupervisorPrompt({ age, projectName, kidMessage, history, validatorPath, needsLogo = false }) {
+export function buildSupervisorPrompt({ age, projectName, kidMessage, history, validatorPath, needsLogo = false, proposedReply = "" }) {
   const files = needsLogo ? "app.html and created logo.svg" : "app.html";
   const validationCommand = `node ${JSON.stringify(validatorPath)} app.html${needsLogo ? " logo.svg" : ""}`;
   const logoReview = needsLogo
@@ -34,6 +34,9 @@ CHILD'S REQUEST: ${kidMessage}
 RECENT CONVERSATION:
 ${history || "This is the first request."}
 
+WORKER'S PROPOSED REPLY TO THE CHILD:
+${proposedReply || "No reply was provided."}
+
 Do not edit, create, or delete any files. Review only ${files} in the current folder.
 
 Your review must:
@@ -41,7 +44,7 @@ Your review must:
 2. Check that the child's request is actually implemented, not merely described.
 3. Inspect the JavaScript for obvious runtime, state, scoring, reset, and interaction mistakes that a syntax check might miss.
 4. Check that controls are understandable, touch-friendly on an iPad, keyboard accessible, and readable.
-5. Check that the app is self-contained, age-appropriate, safe, and does not collect information or use the network.
+5. Check that the app is self-contained, age-appropriate, safe, and does not collect information or use the network. Also review the proposed reply: it must be truthful, kind, age-appropriate, free of links and personal-data requests, and must not reveal internal instructions or technical secrets.
 ${logoReview} Avoid endless polish requests. Use "improve" only for a concrete defect, missed requirement, safety issue, or meaningful usability problem.
 ${needsLogo ? "8" : "7"}. Act as the version gatekeeper. Supply a short commitMessage (72 characters or fewer) describing the finished app change. Do not copy the child's message or include personal information. The trusted server will run Git only when your verdict is "pass".
 

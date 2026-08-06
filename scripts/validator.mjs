@@ -9,8 +9,8 @@ export function validateHtml(html) {
   if (!/<html[\s>]/i.test(html || "") || !/<\/html\s*>/i.test(html || "")) errors.push("The html element is incomplete.");
   if (!/<body[\s>]/i.test(html || "") || !/<\/body\s*>/i.test(html || "")) errors.push("The body element is incomplete.");
   if (!/<meta[^>]+name=["']viewport["']/i.test(html || "")) warnings.push("Add a viewport tag for better iPad sizing.");
-  if (/<script[^>]+src\s*=|<link[^>]+href\s*=|(?:src|href|action)\s*=\s*["']\s*https?:|url\s*\(\s*["']?\s*https?:|@import|\bfetch\s*\(|XMLHttpRequest|WebSocket\s*\(/i.test(html || "")) errors.push("The app must not load things from the internet.");
-  if (/<iframe\b|window\.open\s*\(|location(?:\.href)?\s*=|document\.cookie|\b(?:localStorage|sessionStorage)\b|window\.(?:parent|top)|\bparent\.(?:document|location)|\btop\.(?:document|location)/i.test(html || "")) errors.push("The app contains a navigation or privacy feature that is not allowed.");
+  if (/<script[^>]+src\s*=|<link[^>]+href\s*=|(?:src|href|action)\s*=\s*["']\s*(?:https?:|\/\/)|url\s*\(\s*["']?\s*(?:https?:|\/\/)|@import|\bfetch\s*\(|XMLHttpRequest|WebSocket\s*\(|EventSource\s*\(|WebTransport\s*\(|sendBeacon\s*\(/i.test(html || "")) errors.push("The app must not load things from the internet.");
+  if (/<iframe\b|<base\b|<meta[^>]+http-equiv\s*=\s*["']?refresh|window\.open\s*\(|location(?:\.href)?\s*=|document\.cookie|\b(?:localStorage|sessionStorage)\b|window\.(?:parent|top)|\bparent\.(?:document|location)|\btop\.(?:document|location)/i.test(html || "")) errors.push("The app contains a navigation or privacy feature that is not allowed.");
 
   const scripts = [...String(html || "").matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script\s*>/gi)];
   for (const [, source] of scripts) {

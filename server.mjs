@@ -1,11 +1,12 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
+import { browserSecurityHeaders, isAuthorized, isSameOriginMutation, safeEqual, securePreviewHtml, sessionValue } from "./scripts/security.mjs";
 import { validateHtml, validateLogoSvg } from "./scripts/validator.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -18,11 +19,18 @@ const SUPERVISOR_TIMEOUT_MS = Number(process.env.SUPERVISOR_TIMEOUT_MS || 120_00
 const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(10, Number(process.env.MAX_SUPERVISOR_ROUNDS || 6)));
 const WORKER_MODEL = process.env.CODEX_WORKER_MODEL || "gpt-5.6-sol";
 const SUPERVISOR_MODEL = process.env.CODEX_SUPERVISOR_MODEL || "gpt-5.6-sol";
+const PAIRING_TOKEN = process.env.KIDDO_PAIRING_TOKEN || randomBytes(24).toString("base64url");
+const SECURE_COOKIE = process.env.KIDDO_SECURE_COOKIE === "1";
+const MAX_PROJECTS = Math.max(1, Math.min(500, Number(process.env.KIDDO_MAX_PROJECTS || 100)));
+const MAX_PENDING_BUILDS = Math.max(1, Math.min(50, Number(process.env.KIDDO_MAX_PENDING_BUILDS || 8)));
+const CHAT_HISTORY_LIMIT = Math.max(20, Math.min(1000, Number(process.env.KIDDO_CHAT_HISTORY_LIMIT || 200)));
 const WORKER_REASONING_EFFORT = "low";
 const SUPERVISOR_REASONING_EFFORT = "low";
 const VALIDATOR_PATH = path.join(ROOT, "scripts", "validate-project.mjs");
 const SUPERVISOR_SCHEMA_PATH = path.join(ROOT, "schemas", "supervisor-response.schema.json");
 const activeRuns = new Set();
+const rateBuckets = new Map();
+let pendingBuilds = 0;
 let codexQueue = Promise.resolve();
 let projectGitQueue = Promise.resolve();
 
@@ -44,7 +52,7 @@ async function writeIfMissing(file, contents) {
 async function prepareProjectStore() {
   await mkdir(PROJECTS, { recursive: true });
   try { await stat(path.join(PROJECTS, ".git")); }
-  catch { await runCommand("git", ["init", "-b", "main"], PROJECTS); }
+  catch { await runCommand("git", ["-c", "core.hooksPath=/dev/null", "init", "-b", "main"], PROJECTS); }
   await writeIfMissing(path.join(PROJECTS, ".gitignore"), "*/chat.json\n*.tmp\n");
   await writeIfMissing(path.join(PROJECTS, "README.md"), "# Kiddo Projects\n\nGenerated projects live here, separately from the Kiddo Programmer framework.\nEach project keeps its complete app in `app.html`. Conversation files are kept local and ignored by Git.\n");
 }
@@ -72,18 +80,18 @@ function recordProjectVersion(meta, action, supervisorReview = null) {
       ? `Create project: ${safeCommitName(meta.name)}`
       : safeCommitName(supervisorReview?.commitMessage || `Update project: ${meta.name}`);
     try {
-      await runCommand("git", ["add", "--", ...files], PROJECTS);
+      await runCommand("git", ["-c", "core.hooksPath=/dev/null", "add", "--", ...files], PROJECTS);
       const commitIdentity = action === "create" ? {} : {
         GIT_AUTHOR_NAME: "Kiddo Supervisor",
         GIT_AUTHOR_EMAIL: "supervisor@kiddo.local"
       };
-      await runCommand("git", ["commit", "-m", message, "--", ...files], PROJECTS, commitIdentity);
+      await runCommand("git", ["-c", "core.hooksPath=/dev/null", "commit", "-m", message, "--", ...files], PROJECTS, commitIdentity);
     } catch (error) {
       console.error("Could not commit project version:", error.message);
       return { committed: false, pushed: false, owner: action === "create" ? "system" : "supervisor" };
     }
     try {
-      await runCommand("git", ["push", "origin", "main"], PROJECTS);
+      await runCommand("git", ["-c", "core.hooksPath=/dev/null", "push", "origin", "main"], PROJECTS);
       return { committed: true, pushed: true, owner: action === "create" ? "system" : "supervisor" };
     } catch (error) {
       console.error("Project version was committed locally but could not be pushed:", error.message);
@@ -94,13 +102,51 @@ function recordProjectVersion(meta, action, supervisorReview = null) {
 
 function json(res, status, value) {
   const body = JSON.stringify(value);
-  res.writeHead(status, {
+  res.writeHead(status, browserSecurityHeaders({
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "cache-control": "no-store",
-    "x-content-type-options": "nosniff"
-  });
+  }));
   res.end(body);
+}
+
+function publicProject(project) {
+  return { ...project, html: securePreviewHtml(project.html) };
+}
+
+function clientAddress(req) {
+  return req.socket.remoteAddress || "unknown";
+}
+
+function takeRateLimit(req, bucket, limit, windowMs) {
+  const key = `${bucket}:${clientAddress(req)}`;
+  const now = Date.now();
+  if (rateBuckets.size > 1000) {
+    for (const [storedKey, times] of rateBuckets) {
+      if (!times.some((at) => now - at < 3_600_000)) rateBuckets.delete(storedKey);
+    }
+  }
+  const recent = (rateBuckets.get(key) || []).filter((at) => now - at < windowMs);
+  if (recent.length >= limit) return false;
+  recent.push(now);
+  rateBuckets.set(key, recent);
+  return true;
+}
+
+function requireApiAccess(req, res) {
+  if (!isAuthorized(req.headers.cookie, PAIRING_TOKEN)) {
+    json(res, 401, { error: "This iPad needs a grown-up to pair it with Kiddo Programmer first." });
+    return false;
+  }
+  if (!isSameOriginMutation(req)) {
+    json(res, 403, { error: "That request did not come from Kiddo Programmer." });
+    return false;
+  }
+  if (!takeRateLimit(req, "api", 180, 60_000)) {
+    json(res, 429, { error: "That was very fast! Wait a moment, then try again." });
+    return false;
+  }
+  return true;
 }
 
 async function bodyJson(req) {
@@ -127,8 +173,15 @@ function projectDir(id) {
   return path.join(PROJECTS, id);
 }
 
+async function existingProjectDir(id) {
+  const dir = await realpath(projectDir(id));
+  const root = await realpath(PROJECTS);
+  if (path.dirname(dir) !== root) throw new Error("Unknown project.");
+  return dir;
+}
+
 async function readProject(id) {
-  const dir = projectDir(id);
+  const dir = await existingProjectDir(id);
   const [metaRaw, html, chatRaw, hasLogo] = await Promise.all([
     readFile(path.join(dir, "project.json"), "utf8"),
     readFile(path.join(dir, "app.html"), "utf8"),
@@ -218,10 +271,19 @@ async function runCodexNow(dir, prompt, { sandbox = "workspace-write", outputSch
   if (outputSchema) args.push("--output-schema", outputSchema);
   args.push("-C", dir, prompt);
   return await new Promise((resolve, reject) => {
+    const agentEnv = {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      CODEX_HOME: process.env.CODEX_HOME,
+      LANG: process.env.LANG || "C.UTF-8",
+      TMPDIR: process.env.TMPDIR,
+      NO_COLOR: "1"
+    };
+    for (const key of Object.keys(agentEnv)) if (!agentEnv[key]) delete agentEnv[key];
     const child = spawn(process.env.CODEX_BIN || "codex", args, {
       cwd: dir,
       detached: process.platform !== "win32",
-      env: { ...process.env, NO_COLOR: "1" },
+      env: agentEnv,
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
@@ -270,14 +332,15 @@ function recentHistory(project) {
   return project.messages.slice(-12).map((message) => `${message.role === "kid" ? "Kid" : "Buddy"}: ${message.text}`).join("\n");
 }
 
-async function runSupervisor(dir, project, kidMessage, needsLogo) {
+async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply) {
   const prompt = buildSupervisorPrompt({
     age: project.meta.age,
     projectName: project.meta.name,
     kidMessage,
     history: recentHistory(project),
     validatorPath: VALIDATOR_PATH,
-    needsLogo
+    needsLogo,
+    proposedReply
   });
   const response = await runCodex(dir, prompt, { sandbox: "read-only", outputSchema: SUPERVISOR_SCHEMA_PATH, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT });
   return parseSupervisorResponse(response);
@@ -324,7 +387,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml) {
             checks: ["Deterministic HTML and JavaScript validation failed."]
           };
         } else {
-          lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo);
+          lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo, reply);
         }
         return { html, logo, reply, validation, review: lastReview };
       }
@@ -368,10 +431,12 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
     return json(res, 200, { ok: true });
   }
+  if (!requireApiAccess(req, res)) return;
   if (req.method === "GET" && url.pathname === "/api/projects") {
     return json(res, 200, { projects: await listProjects() });
   }
   if (req.method === "POST" && url.pathname === "/api/projects") {
+    if ((await listProjects()).length >= MAX_PROJECTS) return json(res, 409, { error: "This Raspberry Pi has reached its project limit. Ask a grown-up to archive an old project." });
     const input = await bodyJson(req);
     const name = String(input.name || "").trim().slice(0, 60);
     const age = Number(input.age);
@@ -389,15 +454,15 @@ async function handleApi(req, res, url) {
       saveJson(path.join(dir, "chat.json"), [{ id: randomUUID(), role: "buddy", text: `Hi! I’m your coding buddy. What should we turn ${name} into?`, at: now }])
     ]);
     const versionControl = await recordProjectVersion(meta, "create");
-    return json(res, 201, { ...await readProject(id), versionControl });
+    return json(res, 201, { ...publicProject(await readProject(id)), versionControl });
   }
 
   const match = url.pathname.match(/^\/api\/projects\/([a-z0-9-]+)(?:\/(chat|logo))?$/);
   if (!match) return json(res, 404, { error: "Not found." });
   const [, id, action] = match;
-  if (req.method === "GET" && !action) return json(res, 200, await readProject(id));
+  if (req.method === "GET" && !action) return json(res, 200, publicProject(await readProject(id)));
   if (req.method === "GET" && action === "logo") {
-    const logo = await readFile(path.join(projectDir(id), "logo.svg"));
+    const logo = await readFile(path.join(await existingProjectDir(id), "logo.svg"));
     res.writeHead(200, {
       "content-type": "image/svg+xml; charset=utf-8",
       "content-length": logo.length,
@@ -410,21 +475,25 @@ async function handleApi(req, res, url) {
   }
   if (req.method === "POST" && action === "chat") {
     if (activeRuns.has(id)) return json(res, 409, { error: "Your coding buddy is already working on this project." });
-    const input = await bodyJson(req);
-    const message = String(input.message || "").trim().slice(0, 2000);
-    if (!message) return json(res, 400, { error: "Say or type something first." });
+    if (pendingBuilds >= MAX_PENDING_BUILDS) return json(res, 503, { error: "The coding buddy has a full idea queue. Please wait a moment, then try again." });
     activeRuns.add(id);
+    pendingBuilds += 1;
     try {
+      const input = await bodyJson(req);
+      const message = String(input.message || "").trim().slice(0, 2000);
+      if (!message) return json(res, 400, { error: "Type an idea first." });
       const project = await readProject(id);
-      const dir = projectDir(id);
+      const dir = await existingProjectDir(id);
       const oldHtml = project.html;
       const kidEntry = { id: randomUUID(), role: "kid", text: message, at: new Date().toISOString() };
       project.messages.push(kidEntry);
+      if (project.messages.length > CHAT_HISTORY_LIMIT) project.messages.splice(0, project.messages.length - CHAT_HISTORY_LIMIT);
       await saveJson(path.join(dir, "chat.json"), project.messages);
       const result = await buildWithSupervision(dir, project, message, oldHtml);
       const { html, reply, validation, review } = result;
       const buddyEntry = { id: randomUUID(), role: "buddy", text: reply.trim(), at: new Date().toISOString() };
       project.messages.push(buddyEntry);
+      if (project.messages.length > CHAT_HISTORY_LIMIT) project.messages.splice(0, project.messages.length - CHAT_HISTORY_LIMIT);
       project.meta.updatedAt = buddyEntry.at;
       await Promise.all([
         saveJson(path.join(dir, "chat.json"), project.messages),
@@ -433,8 +502,11 @@ async function handleApi(req, res, url) {
       const versionControl = result.published
         ? await recordProjectVersion(project.meta, "update", review)
         : { committed: false, pushed: false, owner: "supervisor" };
-      return json(res, 200, { html, message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl });
-    } finally { activeRuns.delete(id); }
+      return json(res, 200, { html: securePreviewHtml(html), message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl });
+    } finally {
+      pendingBuilds -= 1;
+      activeRuns.delete(id);
+    }
   }
   return json(res, 405, { error: "That action is not allowed." });
 }
@@ -445,14 +517,25 @@ async function serveStatic(req, res, url) {
   try {
     const body = await readFile(path.join(PUBLIC, file));
     const type = file.endsWith(".html") ? "text/html; charset=utf-8" : file.endsWith(".css") ? "text/css; charset=utf-8" : "application/javascript; charset=utf-8";
-    res.writeHead(200, { "content-type": type, "content-length": body.length, "cache-control": "no-cache", "x-content-type-options": "nosniff" });
+    res.writeHead(200, browserSecurityHeaders({ "content-type": type, "content-length": body.length, "cache-control": "no-cache" }));
     res.end(body);
   } catch { json(res, 404, { error: "Not found." }); }
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
+    const url = new URL(req.url, "http://kiddo.local");
+    if (req.method === "GET" && url.pathname === "/pair") {
+      if (!safeEqual(url.searchParams.get("token") || "", PAIRING_TOKEN)) return json(res, 403, { error: "That pairing link is not valid." });
+      const secure = SECURE_COOKIE ? "; Secure" : "";
+      res.writeHead(303, browserSecurityHeaders({
+        location: "/",
+        "cache-control": "no-store",
+        "set-cookie": `kiddo_session=${encodeURIComponent(sessionValue(PAIRING_TOKEN))}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure}`
+      }));
+      res.end();
+      return;
+    }
     if (url.pathname.startsWith("/api/")) await handleApi(req, res, url);
     else await serveStatic(req, res, url);
   } catch (error) {
@@ -470,4 +553,5 @@ server.listen(PORT, HOST, () => {
   console.log(`Kiddo Programmer is ready.`);
   console.log(`On this Pi: http://localhost:${PORT}`);
   console.log(`On the iPad: http://<PI-IP>:${PORT}`);
+  if (!process.env.KIDDO_PAIRING_TOKEN) console.log(`Development pairing link: http://<PI-IP>:${PORT}/pair?token=${PAIRING_TOKEN}`);
 });

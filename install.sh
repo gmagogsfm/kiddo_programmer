@@ -6,6 +6,7 @@ readonly MIN_NODE_MAJOR=20
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly TEMPLATE="$SCRIPT_DIR/packaging/kiddo-programmer.service.template"
 readonly CONFIG_FILE="/etc/kiddo-programmer.env"
+readonly TOKEN_FILE="/etc/kiddo-programmer-token.env"
 readonly SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
 fail() {
@@ -67,6 +68,22 @@ choose_agent() {
   esac
 }
 
+confirm_provider_data_use() {
+  say ""
+  say "Privacy notice for the grown-up:"
+  say "  A child's current request, age, and recent conversation context are sent"
+  say "  to the selected AI provider so it can build and review the app."
+  say "  Full project and conversation files remain stored on this Raspberry Pi."
+  if [[ "${KIDDO_ACCEPT_PROVIDER_DATA:-}" == "1" ]]; then
+    say "Provider data use accepted through KIDDO_ACCEPT_PROVIDER_DATA=1."
+    return
+  fi
+  [[ -t 0 ]] || fail "A grown-up must accept the provider data notice. Run setup interactively, or set KIDDO_ACCEPT_PROVIDER_DATA=1 after reviewing README.md."
+  local answer
+  read -r -p "Continue with the selected AI provider? [y/N] " answer
+  [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]] || fail "Setup stopped without consent."
+}
+
 ensure_agent_ready() {
   case "$selected_agent" in
     codex)
@@ -110,6 +127,20 @@ print_check() {
   fi
 }
 
+print_pairing() {
+  require_command sudo "sudo is required to read the private pairing secret."
+  local pairing_token configured_port pi_ip
+  pairing_token="$(sudo sed -nE 's/^KIDDO_PAIRING_TOKEN=([A-Za-z0-9_-]+)$/\1/p' "$TOKEN_FILE" | tail -n 1)"
+  [[ -n "$pairing_token" ]] || fail "No pairing secret was found. Run 'kiddo-programmer setup' first."
+  configured_port="$(sudo sed -nE 's/^PORT=([0-9]+)$/\1/p' "$CONFIG_FILE" | tail -n 1)"
+  configured_port="${configured_port:-3000}"
+  pi_ip="$(first_ip || true)"
+  [[ -n "$pi_ip" ]] || fail "Could not find the Pi's network address."
+  say "A grown-up should open this once on each approved iPad:"
+  say "http://$pi_ip:$configured_port/pair?token=$pairing_token"
+  say "Keep this link private."
+}
+
 render_service() {
   local rendered
   rendered="$(<"$TEMPLATE")"
@@ -117,6 +148,7 @@ render_service() {
   rendered="${rendered//@KIDDO_GROUP@/$install_group}"
   rendered="${rendered//@KIDDO_ROOT@/$SCRIPT_DIR}"
   rendered="${rendered//@KIDDO_CONFIG@/$CONFIG_FILE}"
+  rendered="${rendered//@KIDDO_TOKEN_FILE@/$TOKEN_FILE}"
   rendered="${rendered//@KIDDO_AGENT@/$selected_agent}"
   rendered="${rendered//@KIDDO_HOME@/$install_home}"
   rendered="${rendered//@KIDDO_BIN_PATH@/$bin_path}"
@@ -143,12 +175,20 @@ write_default_config() {
   } > "$temporary_config"
 }
 
+write_pairing_token() {
+  local temporary_token="$1"
+  pairing_token="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url"))')"
+  printf 'KIDDO_PAIRING_TOKEN=%s\n' "$pairing_token" > "$temporary_token"
+  sudo install -o root -g root -m 0600 "$temporary_token" "$TOKEN_FILE"
+}
+
 install_service() {
   (( EUID != 0 )) || fail "Run this installer as your normal Pi user, not with sudo. It will request sudo only when needed."
   require_command sudo "sudo is required to install the system service."
   require_command systemctl "This installer requires a Raspberry Pi OS or Debian system that uses systemd."
   check_prerequisites
   choose_agent
+  confirm_provider_data_use
   ensure_agent_ready
 
   install_user="$(id -un)"
@@ -171,19 +211,30 @@ install_service() {
   [[ -w "$projects_dir" ]] || fail "The projects directory is not writable: $projects_dir"
   [[ -r "$codex_home" ]] || fail "The Codex login directory is missing: $codex_home"
 
-  local temporary_dir temporary_service temporary_config
+  local temporary_dir temporary_service temporary_config temporary_token pairing_token
   temporary_dir="$(mktemp -d)"
   trap "rm -rf -- '$temporary_dir'" EXIT
   temporary_service="$temporary_dir/$SERVICE_NAME.service"
   temporary_config="$temporary_dir/kiddo-programmer.env"
+  temporary_token="$temporary_dir/kiddo-programmer-token.env"
   render_service > "$temporary_service"
 
   if ! sudo test -f "$CONFIG_FILE"; then
     write_default_config "$temporary_config"
-    sudo install -o root -g root -m 0644 "$temporary_config" "$CONFIG_FILE"
+    sudo install -o root -g root -m 0600 "$temporary_config" "$CONFIG_FILE"
     say "Created settings: $CONFIG_FILE"
   else
     say "Kept existing settings: $CONFIG_FILE"
+    sudo chmod 0600 "$CONFIG_FILE"
+  fi
+
+  if ! sudo test -f "$TOKEN_FILE"; then
+    write_pairing_token "$temporary_token"
+    say "Created private iPad pairing secret."
+  else
+    pairing_token="$(sudo sed -nE 's/^KIDDO_PAIRING_TOKEN=([A-Za-z0-9_-]+)$/\1/p' "$TOKEN_FILE" | tail -n 1)"
+    [[ -n "$pairing_token" ]] || fail "The pairing secret is invalid: $TOKEN_FILE"
+    sudo chmod 0600 "$TOKEN_FILE"
   fi
 
   sudo install -o root -g root -m 0644 "$temporary_service" "$SERVICE_FILE"
@@ -198,8 +249,11 @@ install_service() {
 
   say ""
   say "Kiddo Programmer is installed and will start automatically with the Pi."
-  if [[ -n "$pi_ip" ]]; then
-    say "Open this on the iPad: http://$pi_ip:$configured_port"
+  if [[ "${KIDDO_HIDE_PAIRING_TOKEN:-}" == "1" ]]; then
+    say "Run 'kiddo-programmer pair' locally to print the private iPad pairing link."
+  elif [[ -n "$pi_ip" ]]; then
+    say "A grown-up should open this once on each iPad:"
+    say "http://$pi_ip:$configured_port/pair?token=$pairing_token"
   else
     say "Open http://<PI-IP>:$configured_port on the iPad."
   fi
@@ -210,11 +264,13 @@ install_service() {
 case "${1:-install}" in
   install) install_service ;;
   --check|check) print_check ;;
+  pair|--pair) print_pairing ;;
   --help|-h|help)
-    say "Usage: ./install.sh [install|--check|--help]"
+    say "Usage: ./install.sh [install|--check|--pair|--help]"
     say ""
     say "  install  Install or update the system service (default)."
     say "  --check  Check Node, Git, Codex, sign-in, and show the expected URL."
+    say "  --pair   Print the private iPad pairing link for a grown-up."
     ;;
   *) fail "Unknown option: $1. Run ./install.sh --help." ;;
 esac

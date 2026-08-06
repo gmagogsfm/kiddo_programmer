@@ -5,11 +5,11 @@ Kiddo Programmer is a free, local AI programming workshop designed for kids. A c
 Everything Kiddo Programmer owns runs on your Raspberry Pi:
 
 - The website is served from your home network.
-- Projects, conversations, logos, and Git history stay on your Pi.
+- Projects, full conversation files, logos, and Git history are stored on your Pi.
 - There is no Kiddo Programmer cloud account, subscription, tracking, or advertising.
 - The framework is free to use under the Apache-2.0 license.
 
-AI generation uses the adult's own supported coding-agent account. OpenAI Codex is currently supported, so the adult needs an eligible ChatGPT subscription or API billing. Requests sent to that agent are subject to its provider's terms and privacy practices.
+AI generation uses the adult's own supported coding-agent account. OpenAI Codex is currently supported, so the adult needs an eligible ChatGPT subscription or API billing. The child's current request, age, and recent conversation context are sent to that provider to build and review the app; its terms and privacy practices apply.
 
 ## See it in action
 
@@ -37,9 +37,11 @@ Every approved update becomes a local Git commit. Generated projects live separa
 
 ## Safety and privacy
 
-Generated apps are self-contained HTML and run in a sandboxed preview. They cannot load external resources, make network requests, navigate the browser, or access other projects. Coding agents run as the normal Pi user with narrowly scoped filesystem access, never as root.
+Generated apps are self-contained HTML and run in a sandboxed, deny-by-default preview. Browser policy blocks network connections, external resources, form submissions, frames, and access to Kiddo Programmer. Coding agents have no command-line network access, receive a scrubbed environment, work only in a temporary project folder, and never run as root.
 
-Use Kiddo Programmer only on a trusted home or classroom network with adult supervision. Do not expose port 3000 to the public internet, and teach children not to enter names, addresses, school information, or other personal details in prompts.
+Use Kiddo Programmer only on a trusted, WPA-protected home or classroom network with adult supervision. Do not expose port 3000 to the internet. Setup creates a private pairing link; a grown-up opens it once on each allowed iPad, and the browser then keeps an HttpOnly pairing cookie. Teach children not to enter names, addresses, school information, or other personal details in prompts.
+
+Conversation history is capped locally, excluded from Git, and can be removed by deleting the project's `chat.json` file. This self-hosted framework does not determine whether a particular home, school, or organization is legally covered by children's privacy law; deployers are responsible for parental notice, consent, retention, and provider choices. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## Raspberry Pi setup
 
@@ -66,7 +68,7 @@ cd KiddoProgrammer
 ./install.sh
 ```
 
-The guided setup selects the coding agent, completes adult sign-in when needed, installs a system service, enables startup at boot, and prints the iPad address. It requests `sudo` only for service installation; the agents remain unprivileged.
+The guided setup selects the coding agent, completes adult sign-in when needed, installs a hardened system service, enables startup at boot, and prints a private device-pairing link. Open that link once on each iPad you approve. Setup requests `sudo` only for service installation; the agents remain unprivileged.
 
 After the npm package is published, installation will be:
 
@@ -77,7 +79,7 @@ kiddo-programmer setup
 
 ### 3. Open it on the iPad
 
-Open the address printed by setup, such as `http://192.168.1.42:3000`, in Safari. Use **Share → Add to Home Screen** for an app-like icon.
+Have a grown-up open the private pairing address printed by setup, such as `http://192.168.1.42:3000/pair?token=…`, in Safari. It immediately redirects to the clean project page. Then use **Share → Add to Home Screen** for an app-like icon. Do not share the pairing link.
 
 If the address changes, run `hostname -I` on the Pi or reserve the Pi's address in your router.
 
@@ -89,6 +91,7 @@ For an npm installation:
 kiddo-programmer status
 kiddo-programmer logs
 kiddo-programmer check
+kiddo-programmer pair   # print the private link for another iPad
 ```
 
 Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:
@@ -97,7 +100,7 @@ Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:
 sudo systemctl restart kiddo-programmer
 ```
 
-Projects default to `~/kiddo_projects`. Back up that entire folder. Conversation files remain local and are excluded from Git commits.
+Projects default to `~/kiddo_projects`. Back up that folder only to storage the parent controls. Conversation files are excluded from Git commits but are included in a full-folder backup.
 
 To update an npm installation:
 

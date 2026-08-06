@@ -10,6 +10,7 @@ test("the packaged CLI exposes setup and check commands", async () => {
   const cli = await readFile(path.join(root, "bin/kiddo-programmer.mjs"), "utf8");
   assert.match(cli, /case "setup"/);
   assert.match(cli, /case "check"/);
+  assert.match(cli, /case "pair"/);
   assert.match(cli, /kiddo-programmer setup/);
 });
 
@@ -18,6 +19,7 @@ test("setup owns coding-agent selection and authentication", async () => {
   assert.match(installer, /Choose the coding agent/);
   assert.match(installer, /codex login --device-auth/);
   assert.match(installer, /ensure_agent_ready/);
+  assert.match(installer, /confirm_provider_data_use/);
   assert.match(installer, /KIDDO_AGENT/);
 });
 
@@ -27,6 +29,9 @@ test("the service template contains no machine-specific home path", async () => 
   assert.match(template, /User=@KIDDO_USER@/);
   assert.match(template, /Environment=KIDDO_AGENT=@KIDDO_AGENT@/);
   assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_CODEX_HOME@/);
+  assert.match(template, /EnvironmentFile=@KIDDO_TOKEN_FILE@/);
+  assert.match(template, /NoNewPrivileges=true/);
+  assert.match(template, /CapabilityBoundingSet=/);
 });
 
 test("the npm package includes the runtime and installer", async () => {
@@ -34,7 +39,8 @@ test("the npm package includes the runtime and installer", async () => {
   assert.equal(pkg.private, undefined);
   assert.equal(pkg.bin["kiddo-programmer"], "bin/kiddo-programmer.mjs");
   assert.equal(pkg.license, "Apache-2.0");
-  for (const required of ["bin/", "assets/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh", "LICENSE", "NOTICE"]) {
+  assert.equal(pkg.dependencies["@openai/codex"], "0.146.0");
+  for (const required of ["bin/", "assets/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh", "LICENSE", "NOTICE", "SECURITY.md"]) {
     assert.ok(pkg.files.includes(required), `${required} should be included in npm packages`);
   }
 });
