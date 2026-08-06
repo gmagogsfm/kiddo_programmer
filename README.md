@@ -1,58 +1,41 @@
 # Kiddo Programmer
 
-Kiddo Programmer is a free, self-hosted AI app workshop for children. It runs on a Raspberry Pi and opens from an iPad on the same private Wi-Fi network. The app a child is making stays on the left, while their conversation with a friendly coding buddy stays on the right.
+Kiddo Programmer is a free, local AI programming workshop designed for kids. A child describes an idea in simple language, and a coding buddy builds a working web app beside the conversation.
 
-## What makes it different
+Everything Kiddo Programmer owns runs on your Raspberry Pi:
 
-- A simple, touch-friendly project chooser and creative workspace
-- Open-ended creation instead of a fixed collection of lessons
-- Age-aware, child-safe agent instructions
-- Separate worker and read-only supervisor agents
-- Automatic checks and repair loops before a new version is shown
-- A last-known-good version when an attempted change fails
-- Self-contained HTML apps without third-party packages or trackers
-- A custom local project logo generated from the child's first idea
-- Separate framework and project repositories with version history
-- Friendly in-page progress and errors; children do not need developer tools
+- The website is served from your home network.
+- Projects, conversations, logos, and Git history stay on your Pi.
+- There is no Kiddo Programmer cloud account, subscription, tracking, or advertising.
+- The framework is free to use under the Apache-2.0 license.
 
-## How it works
+AI generation uses the adult's own supported coding-agent account. OpenAI Codex is currently supported, so the adult needs an eligible ChatGPT subscription or API billing. Requests sent to that agent are subject to its provider's terms and privacy practices.
 
-A worker agent builds each request in a temporary staging folder. Automated checks inspect the HTML, JavaScript, external resources, navigation, storage use, and generated logo. A separate supervisor agent reviews the result without write access. If it finds a problem, its feedback goes back to the worker for another repair round instead of being shown to the child.
+## Designed for kids
 
-Only an approved build replaces the visible app. If a request cannot be completed safely, the previous working version remains available.
+- Age-aware conversation with short, approachable replies
+- Open-ended creation instead of fixed lessons
+- Touch-friendly project selection and app previews for iPad
+- No microphone, purchases, external links, ads, or child accounts
+- Friendly progress and errors instead of developer consoles
 
-## Project ownership and versions
+## Builds that keep working
 
-Children's projects are stored separately from the framework. Each new project and every supervisor-approved update becomes a local Git commit in the projects repository. Rejected builds are not published or committed.
+A worker agent builds each request in a temporary folder. Automated checks inspect the result, then a separate read-only supervisor reviews it. Problems go back to the worker for repair. Only an approved version is shown to the child; otherwise, the previous working version stays available.
 
-If the projects repository has an `origin` remote, approved versions are also pushed there. A failed remote backup never prevents the child from continuing locally. Conversation files named `chat.json` stay local and are excluded from Git commits; commit messages never contain the child's chat messages.
+Every approved update becomes a local Git commit. Generated projects live separately from the framework, so an agent cannot accidentally modify Kiddo Programmer itself.
 
-## Safety boundary
+## Safety and privacy
 
-The preview runs in a sandboxed iframe and every coding turn is scoped to one project's staged folder. Generated apps are blocked from network requests and external resources. Codex runs non-interactively: the worker can write only inside staging, while the supervisor receives read-only access. Requests outside those boundaries fail instead of waiting for permission.
+Generated apps are self-contained HTML and run in a sandboxed preview. They cannot load external resources, make network requests, navigate the browser, or access other projects. Coding agents run as the normal Pi user with narrowly scoped filesystem access, never as root.
 
-There is intentionally no login or access key. Use Kiddo Programmer only on a trusted home or classroom network with adult supervision, and never expose its port directly to the public internet.
-
-The framework and project files live on the Pi, but the default Codex models use OpenAI's service. Creating apps therefore requires an internet connection and an eligible ChatGPT plan or API billing. Do not ask children to enter names, addresses, contact details, school information, or other personal information in their requests.
-
-## License
-
-Kiddo Programmer is licensed under the [Apache License 2.0](LICENSE). The software is provided on an "AS IS" basis, without warranties or conditions of any kind. See [NOTICE](NOTICE) for project attribution.
+Use Kiddo Programmer only on a trusted home or classroom network with adult supervision. Do not expose port 3000 to the public internet, and teach children not to enter names, addresses, school information, or other personal details in prompts.
 
 ## Raspberry Pi setup
 
-This setup turns a Raspberry Pi into a small home server. Nothing needs to be installed on the iPad.
-
-### What you need
-
-- A Raspberry Pi running 64-bit Raspberry Pi OS with an internet connection
-- An iPad and the Pi connected to the same trusted Wi-Fi network
-- A keyboard and screen for the Pi, or SSH access to it
-- A ChatGPT plan that includes Codex, or an OpenAI API account with billing enabled
+You need 64-bit Raspberry Pi OS, an iPad on the same Wi-Fi, and an adult-owned Codex account.
 
 ### 1. Install the basic tools
-
-Open a terminal on the Pi and run:
 
 ```bash
 sudo apt update
@@ -60,19 +43,11 @@ sudo apt install -y git nodejs npm
 node --version
 ```
 
-Kiddo Programmer requires Node.js 20 or newer. If the reported version begins with `v18` or lower, install a current LTS release using the instructions at [nodejs.org](https://nodejs.org/en/download) and check the version again.
+Node.js 20 or newer is required. If the version is older, install a current LTS release from [nodejs.org](https://nodejs.org/en/download).
 
-### 2. Install Kiddo Programmer
+### 2. Install the current release
 
-The npm package installs Kiddo Programmer and its Codex CLI dependency together:
-
-```bash
-npm install --global kiddo-programmer
-```
-
-If npm reports a permissions error, follow npm's guide for [avoiding global-install permission errors](https://docs.npmjs.com/resolving-eacces-permissions-errors) rather than running npm as root.
-
-Version 0.3.2 is ready to package but has not yet been published to npm. Until it is published, use the source installation below and install Codex separately:
+The npm package is prepared but not published yet. Install from GitHub for now:
 
 ```bash
 npm install --global @openai/codex
@@ -81,165 +56,66 @@ cd KiddoProgrammer
 ./install.sh
 ```
 
-### 3. Run the guided setup
+The guided setup selects the coding agent, completes adult sign-in when needed, installs a system service, enables startup at boot, and prints the iPad address. It requests `sudo` only for service installation; the agents remain unprivileged.
 
-For the npm installation, run:
+After the npm package is published, installation will be:
 
 ```bash
+npm install --global kiddo-programmer
 kiddo-programmer setup
 ```
 
-The wizard will:
+### 3. Open it on the iPad
 
-1. Ask which coding agent to use. OpenAI Codex is currently supported.
-2. Check whether that agent is signed in.
-3. If needed, show a device code and web address so a grown-up can finish signing in from any device.
-4. Create a separate `kiddo_projects` folder in the Pi user's home directory.
-5. Create `/etc/kiddo-programmer.env` for settings.
-6. Install and start the `kiddo-programmer` system service.
-7. Configure the service to start automatically whenever the Pi boots.
-8. Print the address to open on the iPad.
+Open the address printed by setup, such as `http://192.168.1.42:3000`, in Safari. Use **Share → Add to Home Screen** for an app-like icon.
 
-The installer requests the Pi password only when it needs to create the system service. Coding agents always run as the normal Pi user, not as root.
-
-Codex supports ChatGPT sign-in for subscription access and API-key sign-in for usage-based access. The guided Pi flow uses device sign-in. Treat the files under `~/.codex` as private credentials—never copy them into the project repository or share them.
-
-### 4. Open it on the iPad
-
-The final setup message shows an address similar to:
-
-```text
-http://192.168.1.42:3000
-```
-
-Open that address in Safari. To make it feel like an app, use Safari's Share button and choose **Add to Home Screen**.
-
-The address can change if the router gives the Pi a new IP address. Reserving the Pi's address in the home router is the most reliable solution. You can always find the current address by running:
-
-```bash
-hostname -I
-```
+If the address changes, run `hostname -I` on the Pi or reserve the Pi's address in your router.
 
 ## Administration
 
-Check whether the service is running:
+For an npm installation:
 
 ```bash
 kiddo-programmer status
-```
-
-See recent server messages:
-
-```bash
 kiddo-programmer logs
-```
-
-Check Node, Git, Codex, sign-in, and the expected iPad address:
-
-```bash
 kiddo-programmer check
 ```
 
-Restart the service after changing settings:
+Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:
 
 ```bash
 sudo systemctl restart kiddo-programmer
 ```
 
-### Configuration
+Projects default to `~/kiddo_projects`. Back up that entire folder. Conversation files remain local and are excluded from Git commits.
 
-Edit the service settings with:
-
-```bash
-sudo nano /etc/kiddo-programmer.env
-sudo systemctl restart kiddo-programmer
-```
-
-The defaults are suitable for one family. Available settings are:
-
-- `PORT` — web port, default `3000`
-- `HOST` — listening address, default `0.0.0.0`
-- `KIDDO_PROJECTS_DIR` — where children's projects are stored
-- `KIDDO_AGENT` — coding-agent adapter selected during setup; currently `codex`
-- `CODEX_BIN` — alternate path to the Codex executable
-- `CODEX_WORKER_MODEL` — model used to build apps, default `gpt-5.6-sol`
-- `CODEX_SUPERVISOR_MODEL` — model used to review apps, default `gpt-5.6-sol`
-- `CODEX_TIMEOUT_MS` — maximum worker time in milliseconds
-- `SUPERVISOR_TIMEOUT_MS` — maximum supervisor time in milliseconds
-- `MAX_SUPERVISOR_ROUNDS` — maximum build-and-review rounds, from 2 through 10
-
-Both Codex roles explicitly use low reasoning effort to keep ordinary requests responsive and control model usage.
-
-### Update Kiddo Programmer
-
-The framework and children's projects are in separate folders, so updating the npm package does not replace their work:
+To update an npm installation:
 
 ```bash
 npm update --global kiddo-programmer
 kiddo-programmer setup
 ```
 
-The setup command preserves `/etc/kiddo-programmer.env` and refreshes the service definition. For a Git checkout, use:
-
-```bash
-git pull --ff-only
-npm test
-./install.sh
-```
-
-### Back up projects
-
-By default, projects are stored in `~/kiddo_projects`. Copy that entire folder to another drive or backup system. It is automatically a Git repository, so advanced users can also connect it to a private remote repository:
-
-```bash
-cd ~/kiddo_projects
-git remote add origin git@github.com:YOUR-NAME/YOUR-PRIVATE-REPO.git
-git push -u origin main
-```
-
-Do not use a public repository for children's projects. Conversation history stays local in `chat.json` and is excluded from Git commits.
+For a Git installation, run `git pull --ff-only`, `npm test`, and `./install.sh`.
 
 ## Troubleshooting
 
-### The page does not open
-
-Confirm that the service is running and that both devices use the same Wi-Fi:
+If the page does not open, confirm that the iPad and Pi use the same Wi-Fi, then run:
 
 ```bash
-kiddo-programmer status
+sudo systemctl status kiddo-programmer
 hostname -I
 ```
 
-Use the first address shown by `hostname -I`, followed by `:3000`.
-
-### The coding buddy says a grown-up must sign in
-
-Run the guided setup as the same normal Pi user that originally installed the service. It will launch sign-in and restart the service:
-
-```bash
-kiddo-programmer setup
-```
-
-### The service stopped after an update
-
-Run the checks and inspect the latest service messages:
-
-```bash
-kiddo-programmer check
-kiddo-programmer logs
-```
-
-### GitHub backup does not push
-
-The child can continue working because every approved version is committed locally first. Configure the remote repository's SSH key on the Pi, then run `git push` manually to see GitHub's detailed error.
+If the agent needs sign-in or the service stopped after an update, rerun `./install.sh` from a Git checkout or `kiddo-programmer setup` from an npm installation.
 
 ## Development
-
-Run Kiddo Programmer from a source checkout without installing a system service:
 
 ```bash
 npm test
 npm start
 ```
 
-The terminal prints the local URL. Projects default to a sibling folder named `kiddo_projects`, keeping generated apps and conversation data outside the framework repository.
+## License
+
+Kiddo Programmer is free software under the [Apache License 2.0](LICENSE). It is provided on an "AS IS" basis without warranties or conditions of any kind. See [NOTICE](NOTICE) for attribution.
