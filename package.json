@@ -23,10 +23,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gmagogsfm/KiddoProgrammer.git"
+    "url": "git+https://github.com/gmagogsfm/kiddo_programmer.git"
   },
-  "homepage": "https://github.com/gmagogsfm/KiddoProgrammer#readme",
-  "bugs": "https://github.com/gmagogsfm/KiddoProgrammer/issues",
+  "homepage": "https://github.com/gmagogsfm/kiddo_programmer#readme",
+  "bugs": "https://github.com/gmagogsfm/kiddo_programmer/issues",
   "keywords": [
     "raspberry-pi",
     "kids",

@@ -60,8 +60,6 @@ Node.js 20 or newer is required. If the version is older, install a current LTS 
 
 ### 2. Install the current release
 
-The npm package is prepared but not published yet. Install from GitHub for now:
-
 Install the agent you plan to use first:
 
 ```bash
@@ -78,19 +76,12 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 Then install Kiddo Programmer:
 
 ```bash
-git clone https://github.com/gmagogsfm/KiddoProgrammer.git
-cd KiddoProgrammer
+git clone https://github.com/gmagogsfm/kiddo_programmer.git
+cd kiddo_programmer
 ./install.sh
 ```
 
 The guided setup selects the coding agent, completes adult sign-in when needed, installs a hardened system service, enables startup at boot, and prints the iPad address. Setup requests `sudo` only for service installation; the agents remain unprivileged.
-
-After the npm package is published, installation will be:
-
-```bash
-npm install --global kiddo-programmer
-kiddo-programmer setup
-```
 
 ### 3. Open it on the iPad
 
@@ -100,12 +91,11 @@ If the address changes, run `hostname -I` on the Pi or reserve the Pi's address 
 
 ## Administration
 
-For an npm installation:
-
 ```bash
-kiddo-programmer status
-kiddo-programmer logs
-kiddo-programmer check
+cd ~/kiddo_programmer
+./install.sh --check
+sudo systemctl status kiddo-programmer
+sudo journalctl -u kiddo-programmer -n 100
 ```
 
 Settings live in `/etc/kiddo-programmer.env`. Restart after editing them:
@@ -118,14 +108,14 @@ sudo systemctl restart kiddo-programmer
 
 Projects default to `~/kiddo_projects`. Back up that folder only to storage the parent controls. Conversation files are excluded from Git commits but are included in a full-folder backup.
 
-To update an npm installation:
+To update Kiddo Programmer:
 
 ```bash
-npm update --global kiddo-programmer
-kiddo-programmer setup
+cd ~/kiddo_programmer
+git pull --ff-only
+npm test
+./install.sh
 ```
-
-For a Git installation, run `git pull --ff-only`, `npm test`, and `./install.sh`.
 
 ## Troubleshooting
 
@@ -136,7 +126,7 @@ sudo systemctl status kiddo-programmer
 hostname -I
 ```
 
-If the agent needs sign-in or the service stopped after an update, rerun `./install.sh` from a Git checkout or `kiddo-programmer setup` from an npm installation.
+If the agent needs sign-in or the service stopped after an update, rerun `./install.sh` from the cloned repository.
 
 ## Development
 

@@ -1,6 +1,6 @@
 [Unit]
 Description=Kiddo Programmer web app workshop
-Documentation=https://github.com/gmagogsfm/KiddoProgrammer
+Documentation=https://github.com/gmagogsfm/kiddo_programmer
 After=network-online.target
 Wants=network-online.target
 

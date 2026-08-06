@@ -90,13 +90,13 @@ confirm_provider_data_use() {
 ensure_agent_ready() {
   case "$selected_agent" in
     codex)
-      require_command codex "Codex CLI is required. The npm package includes it; source installs can run: npm install --global @openai/codex"
+      require_command codex "Codex CLI is required. Install it with: npm install --global @openai/codex"
       if codex login status >/dev/null 2>&1; then
         say "OpenAI Codex is already signed in."
         return
       fi
 
-      [[ -t 0 ]] || fail "Codex needs an interactive sign-in. Run 'kiddo-programmer setup' in a terminal."
+      [[ -t 0 ]] || fail "Codex needs an interactive sign-in. Run './install.sh' in a terminal."
       say ""
       say "Codex needs a grown-up to sign in."
       say "A code and web address will appear. Complete those instructions on any device."
@@ -111,7 +111,7 @@ ensure_agent_ready() {
         say "Claude Code is already signed in."
         return
       fi
-      [[ -t 0 ]] || fail "Claude Code needs an interactive sign-in. Run 'kiddo-programmer setup' in a terminal."
+      [[ -t 0 ]] || fail "Claude Code needs an interactive sign-in. Run './install.sh' in a terminal."
       say "Claude Code needs a grown-up to sign in. Follow the web address and code it shows."
       claude auth login || fail "Claude Code sign-in did not finish. You can run setup again to retry."
       claude auth status >/dev/null 2>&1 || fail "Claude Code did not report a completed sign-in."
@@ -123,7 +123,7 @@ ensure_agent_ready() {
         say "Antigravity CLI is already signed in."
         return
       fi
-      [[ -t 0 ]] || fail "Antigravity CLI setup is interactive. Run 'kiddo-programmer setup' in a terminal."
+      [[ -t 0 ]] || fail "Antigravity CLI setup is interactive. Run './install.sh' in a terminal."
       say "Antigravity needs a grown-up to sign in and trust the project folder."
       say "Complete its setup, then use /quit to return to Kiddo Programmer setup."
       agy || fail "Antigravity setup did not finish. You can run setup again to retry."
@@ -137,9 +137,9 @@ ensure_agent_ready() {
 check_agent() {
   selected_agent="${KIDDO_AGENT:-codex}"
   case "${selected_agent,,}" in
-    codex) require_command codex "Codex CLI is required."; codex login status >/dev/null 2>&1 || fail "Codex is not signed in. Run 'kiddo-programmer setup'." ;;
-    claude) require_command claude "Claude Code is required."; claude auth status >/dev/null 2>&1 || fail "Claude Code is not signed in. Run 'kiddo-programmer setup'." ;;
-    antigravity) require_command agy "Antigravity CLI is required."; agy models >/dev/null 2>&1 || fail "Antigravity is not ready. Run 'kiddo-programmer setup'." ;;
+    codex) require_command codex "Codex CLI is required."; codex login status >/dev/null 2>&1 || fail "Codex is not signed in. Run './install.sh'." ;;
+    claude) require_command claude "Claude Code is required."; claude auth status >/dev/null 2>&1 || fail "Claude Code is not signed in. Run './install.sh'." ;;
+    antigravity) require_command agy "Antigravity CLI is required."; agy models >/dev/null 2>&1 || fail "Antigravity is not ready. Run './install.sh'." ;;
     *) fail "Unsupported KIDDO_AGENT: $selected_agent" ;;
   esac
 }
