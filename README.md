@@ -11,6 +11,8 @@ Everything Kiddo Programmer owns runs on your Raspberry Pi:
 
 AI generation uses the adult's own supported coding-agent account. OpenAI Codex is currently supported, so the adult needs an eligible ChatGPT subscription or API billing. Requests sent to that agent are subject to its provider's terms and privacy practices.
 
+![Kiddo Programmer architecture: iPad, local Raspberry Pi build loop, and the adult's AI account](assets/architecture.svg)
+
 ## Designed for kids
 
 - Age-aware conversation with short, approachable replies

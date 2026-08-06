@@ -34,7 +34,7 @@ test("the npm package includes the runtime and installer", async () => {
   assert.equal(pkg.private, undefined);
   assert.equal(pkg.bin["kiddo-programmer"], "bin/kiddo-programmer.mjs");
   assert.equal(pkg.license, "Apache-2.0");
-  for (const required of ["bin/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh", "LICENSE", "NOTICE"]) {
+  for (const required of ["bin/", "assets/", "packaging/", "public/", "scripts/", "server.mjs", "install.sh", "LICENSE", "NOTICE"]) {
     assert.ok(pkg.files.includes(required), `${required} should be included in npm packages`);
   }
 });
@@ -45,4 +45,5 @@ test("the README contains the complete setup and troubleshooting guide", async (
   assert.match(readme, /### 1\. Install the basic tools/);
   assert.match(readme, /## Administration/);
   assert.match(readme, /## Troubleshooting/);
+  assert.match(readme, /assets\/architecture\.svg/);
 });
