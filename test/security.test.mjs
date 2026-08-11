@@ -42,4 +42,12 @@ test("Builder Bunny uses streamed, real supervision stages", async () => {
   assert.match(ui, /apiStream/);
   assert.match(bunny, /<svg/);
   assert.match(bunny, /Builder Bunny/);
+  const messagesStart = ui.indexOf('<div class="messages" id="messages"');
+  const bunnyPosition = ui.indexOf('id="buildBunny"');
+  const composerStart = ui.indexOf('<form class="composer"');
+  assert.ok(messagesStart < bunnyPosition && bunnyPosition < composerStart, "Builder Bunny should live inside the chat history");
+  assert.doesNotMatch(ui, /\.build-bunny\s*\{[^}]*position\s*:\s*absolute/);
+  assert.doesNotMatch(ui, /addMessage\("thinking"/);
+  const busyHandler = ui.slice(ui.indexOf("function setBusy"), ui.indexOf("function renderMessages"));
+  assert.doesNotMatch(busyHandler, /preview|iframe|pointerEvents/, "busy state should not disable the current app");
 });

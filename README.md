@@ -29,6 +29,7 @@ The child plays the working app on the left and describes changes on the right.
 - No microphone, purchases, external links, ads, or child accounts
 - Friendly progress and errors instead of developer consoles
 - A jumping Builder Bunny shows real build, check, repair, and save stages
+- Builder Bunny stays in the chat history so the current app remains clear and playable during a build
 
 ## Builds that keep working
 
