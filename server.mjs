@@ -543,7 +543,7 @@ async function handleApi(req, res, url) {
         streamEvent(res, { type: "progress", stage: "saving" });
         versionControl = await recordProjectVersion(project.meta, "update", review);
       }
-      streamEvent(res, { type: "complete", result: { html: securePreviewHtml(html), message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl } });
+      streamEvent(res, { type: "complete", result: { html: securePreviewHtml(html), published: result.published, message: buddyEntry, validation, review: { verdict: review?.verdict || "unavailable", checks: review?.checks || [] }, versionControl } });
       res.end();
       return;
     } catch (error) {

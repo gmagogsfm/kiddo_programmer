@@ -48,6 +48,23 @@ test("Builder Bunny uses streamed, real supervision stages", async () => {
   assert.ok(messagesStart < bunnyPosition && bunnyPosition < composerStart, "Builder Bunny should live inside the chat history");
   assert.doesNotMatch(ui, /\.build-bunny\s*\{[^}]*position\s*:\s*absolute/);
   assert.doesNotMatch(ui, /addMessage\("thinking"/);
-  const busyHandler = ui.slice(ui.indexOf("function setBusy"), ui.indexOf("function renderMessages"));
+  const busyHandler = ui.slice(ui.indexOf("function setBusy"), ui.indexOf("function clearPendingVersion"));
   assert.doesNotMatch(busyHandler, /preview|iframe|pointerEvents/, "busy state should not disable the current app");
+});
+
+test("approved app versions wait for the child before replacing the preview", async () => {
+  const [server, ui] = await Promise.all([
+    readFile(path.join(root, "server.mjs"), "utf8"),
+    readFile(path.join(root, "public/index.html"), "utf8")
+  ]);
+  assert.match(server, /published: result\.published/);
+  assert.match(ui, /New version available/);
+  assert.match(ui, /id="loadUpdate"/);
+  const submitHandler = ui.slice(ui.indexOf('$("chatForm").addEventListener'), ui.indexOf("async function start"));
+  assert.match(submitHandler, /if\(result\.published\)setPendingVersion\(result\.html\)/);
+  assert.doesNotMatch(submitHandler, /srcdoc=result\.html/);
+  const pendingHandlers = ui.slice(ui.indexOf("function clearPendingVersion"), ui.indexOf("function renderMessages"));
+  assert.match(pendingHandlers, /srcdoc=pendingVersion\.html/);
+  assert.match(pendingHandlers, /updateReady.*hidden=true/);
+  assert.match(ui, /loadUpdate.*addEventListener\("click",loadPendingVersion\)/);
 });

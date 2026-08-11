@@ -16,7 +16,7 @@
     .shell { height:100dvh; display:grid; grid-template-columns:minmax(0, 1.45fr) minmax(340px, .85fr); gap:12px; padding:12px; }
     .preview-panel, .chat-panel { min-width:0; overflow:hidden; background:white; border-radius:24px; box-shadow:var(--shadow); }
     .preview-panel { display:flex; flex-direction:column; }
-    .toolbar { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line); }
+    .toolbar { min-height:64px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; padding:10px 14px; border-bottom:1px solid var(--line); }
     .brand { display:flex; align-items:center; gap:10px; min-width:0; }
     .logo { display:grid; place-items:center; width:40px; height:40px; flex:0 0 auto; border-radius:14px; color:white; font-size:21px; background:linear-gradient(145deg,#806df2,#5546d4); transform:rotate(-3deg); }
     .brand-copy { min-width:0; }
@@ -24,6 +24,10 @@
     .brand-copy span { color:var(--muted); font-size:12px; margin-top:1px; }
     .status { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:999px; color:#267352; background:#e7f8ef; font-size:13px; font-weight:700; }
     .dot { width:8px; height:8px; border-radius:50%; background:var(--green); }
+    .toolbar-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-left:auto; }
+    .update-ready { display:flex; align-items:center; gap:8px; padding:5px 6px 5px 11px; border:2px solid #efbe4b; border-radius:14px; color:#654b11; background:#fff7d8; box-shadow:0 6px 18px rgba(111,81,14,.14); font-size:13px; font-weight:850; }
+    .load-update { min-height:36px; padding:7px 11px; border:0; border-radius:10px; color:white; background:var(--purple); font-weight:850; cursor:pointer; }
+    .load-update:hover { background:var(--purple-dark); }
     .preview-wrap { position:relative; flex:1; min-height:0; background:linear-gradient(135deg,#edf1ff,#fff8e8); }
     iframe { width:100%; height:100%; border:0; background:white; }
     .empty { position:absolute; inset:0; display:grid; place-items:center; padding:30px; text-align:center; }
@@ -114,7 +118,7 @@
     <section class="preview-panel" aria-label="Your app">
       <header class="toolbar">
         <div class="brand"><div class="logo">✦</div><div class="brand-copy"><strong>Kiddo Programmer</strong><span id="projectName">Pick a project to begin</span></div></div>
-        <div class="status" id="status"><span class="dot"></span><span>Ready</span></div>
+        <div class="toolbar-actions"><div class="update-ready" id="updateReady" role="status" aria-live="polite" hidden><span>✨ New version available</span><button class="load-update" id="loadUpdate" type="button">Load it</button></div><div class="status" id="status"><span class="dot"></span><span>Ready</span></div></div>
       </header>
       <div class="preview-wrap">
         <iframe id="preview" title="Your app preview" sandbox="allow-scripts allow-modals allow-pointer-lock" referrerpolicy="no-referrer" hidden></iframe>
@@ -147,6 +151,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let currentProject = null;
+    let pendingVersion = null;
     let busy = false;
 
     async function api(url, options = {}) {
@@ -171,14 +176,18 @@
     function setStatus(kind="ready") { const values={ready:["#29a66f","Ready"],busy:["#f2a93b","Building & checking…"],error:["#d65059","Please try again"]};const [color,label]=values[kind];$("status").innerHTML=`<span class="dot" style="background:${color}"></span><span>${label}</span>`; }
     function setBuildStage(stage) { const stages={building:["Building your idea…","Builder Bunny is putting the pieces together."],checking:["Checking every button…","Making sure the app works when you tap and play."],reviewing:["Giving it a careful look…","Checking that everything is fun, clear, and safe."],fixing:["Fixing a little wobble…","Builder Bunny found something to make better."],finishing:["Adding the final sparkle…","Your new version is almost ready."],saving:["Tucking it safely away…","Saving the working version for next time."]};const [title,detail]=stages[stage]||stages.building;$("bunnyTitle").textContent=title;$("bunnyDetail").textContent=detail;$("buildBunny").hidden=false;$("messages").scrollTop=$("messages").scrollHeight; }
     function setBusy(value) { busy=value; $("send").disabled=value || !currentProject; $("messageInput").disabled=value; $("projectSelect").disabled=value; $("newProject").disabled=value; $("backProjects").disabled=value; if(value){setStatus("busy");setBuildStage("building");}else{$("buildBunny").hidden=true;} }
+    function clearPendingVersion() { pendingVersion=null;$("updateReady").hidden=true; }
+    function setPendingVersion(html) { pendingVersion={projectId:currentProject.meta.id,html};$("updateReady").hidden=false; }
+    function loadPendingVersion() { if(!pendingVersion||pendingVersion.projectId!==currentProject?.meta.id)return;$("preview").srcdoc=pendingVersion.html;currentProject.html=pendingVersion.html;clearPendingVersion();$("preview").focus(); }
     function renderMessages(messages) { const bunny=$("buildBunny");$("messages").innerHTML="";for(const message of messages)addMessage(message.role,message.text);$("messages").append(bunny); }
     function addMessage(role, text, id="") { const row=document.createElement("div"); row.className=`message ${role}`; if(id) row.id=id; const bubble=document.createElement("div"); bubble.className="bubble"; bubble.textContent=text; row.append(bubble); const bunny=$("buildBunny");$("messages").insertBefore(row,bunny?.parentElement===$("messages")?bunny:null);$("messages").scrollTop=$("messages").scrollHeight; }
     function renderProjectList(projects) { $("projectList").innerHTML=""; if(!projects.length){const empty=document.createElement("div");empty.className="project-list-empty";empty.textContent="No projects yet. Create one and start imagining!";$("projectList").append(empty);return;} for(const project of projects){const card=document.createElement("button");card.className="project-card";card.type="button";const icon=document.createElement("span");icon.className="project-icon";if(project.hasLogo){const image=document.createElement("img");image.src=`/api/projects/${project.id}/logo?v=${encodeURIComponent(project.updatedAt)}`;image.alt="";image.addEventListener("error",()=>{icon.textContent="🚀";},{once:true});icon.append(image);}else{icon.textContent="🚀";}const copy=document.createElement("span");copy.className="project-card-copy";const name=document.createElement("strong");name.textContent=project.name;const age=document.createElement("small");age.textContent=`Maker age ${project.age}`;const arrow=document.createElement("span");arrow.className="project-arrow";arrow.textContent="›";copy.append(name,age);card.append(icon,copy,arrow);card.addEventListener("click",()=>loadProject(project.id));$("projectList").append(card);} }
     function showProjectHome() { $("chatWorkspace").hidden=true; $("projectHome").hidden=false; }
-    function renderProject(project) { currentProject=project; $("projectHome").hidden=true; $("chatWorkspace").hidden=false; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("hint").textContent="Leave out names, schools, and private information"; $("projectSelect").value=project.meta.id; }
+    function renderProject(project) { clearPendingVersion();currentProject=project; $("projectHome").hidden=true; $("chatWorkspace").hidden=false; $("projectName").textContent=`${project.meta.name} · age ${project.meta.age}`; $("preview").srcdoc=project.html; $("preview").hidden=false; $("empty").hidden=true; renderMessages(project.messages); $("messageInput").disabled=false; $("send").disabled=false; $("hint").textContent="Leave out names, schools, and private information"; $("projectSelect").value=project.meta.id; }
     async function refreshProjects(selectId) { const {projects}=await api("/api/projects"); renderProjectList(projects); $("projectSelect").innerHTML='<option value="">Switch project…</option>'; for(const p of projects){const o=document.createElement("option");o.value=p.id;o.textContent=p.name;$("projectSelect").append(o);} if(selectId) $("projectSelect").value=selectId; return projects; }
     async function loadProject(id) { if(!id)return; try { renderProject(await api(`/api/projects/${id}`));setStatus("ready"); } catch(e){setStatus("error");toast(e.message);} }
     $("projectSelect").addEventListener("change", (e)=>loadProject(e.target.value));
+    $("loadUpdate").addEventListener("click",loadPendingVersion);
     function showCreate(){ $("createError").hidden=true;$("createDialog").showModal(); setTimeout(()=>$("newName").focus(),50); }
     $("newProject").addEventListener("click",showCreate); $("newProjectHome").addEventListener("click",showCreate);
     $("backProjects").addEventListener("click",async()=>{await refreshProjects();showProjectHome();});
@@ -186,7 +195,7 @@
     $("createForm").addEventListener("submit",async(e)=>{e.preventDefault();const submitter=e.submitter;if(submitter?.value==="cancel"){ $("createDialog").close();return;}if(!e.currentTarget.reportValidity())return;const error=$("createError");const button=$("createSubmit");error.hidden=true;button.disabled=true;button.textContent="Creating…";try{const project=await api("/api/projects",{method:"POST",body:JSON.stringify({name:$("newName").value,age:Number($("newAge").value)})});$("createDialog").close();$("newName").value="";await refreshProjects(project.meta.id);renderProject(project);setStatus("ready");$("messageInput").focus();}catch(err){error.textContent=err.message;error.hidden=false;}finally{button.disabled=false;button.textContent="Create project";}});
     $("messageInput").addEventListener("input",()=>{$("messageInput").style.height="auto";$("messageInput").style.height=`${Math.min($("messageInput").scrollHeight,120)}px`;});
     $("messageInput").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
-    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";setBusy(true);try{const result=await apiStream(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})},setBuildStage);addMessage("buddy",result.message.text);$("preview").srcdoc=result.html;currentProject.html=result.html;await refreshProjects(currentProject.meta.id);setStatus("ready");}catch(err){addMessage("buddy",`${err.message} I put your idea back in the box so you can tap send again.`);$("messageInput").value=text;$("messageInput").dispatchEvent(new Event("input"));setStatus("error");toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
+    $("chatForm").addEventListener("submit",async(e)=>{e.preventDefault();const text=$("messageInput").value.trim();if(!text||!currentProject||busy)return;addMessage("kid",text);$("messageInput").value="";$("messageInput").style.height="auto";setBusy(true);try{const result=await apiStream(`/api/projects/${currentProject.meta.id}/chat`,{method:"POST",body:JSON.stringify({message:text})},setBuildStage);addMessage("buddy",result.message.text);if(result.published)setPendingVersion(result.html);await refreshProjects(currentProject.meta.id);setStatus("ready");}catch(err){addMessage("buddy",`${err.message} I put your idea back in the box so you can tap send again.`);$("messageInput").value=text;$("messageInput").dispatchEvent(new Event("input"));setStatus("error");toast(err.message);}finally{setBusy(false);$("messageInput").focus();}});
 
     async function start(){try{await refreshProjects();showProjectHome();setStatus("ready");}catch(e){setStatus("error");toast(e.message);$("projectList").innerHTML="";const box=document.createElement("div");box.className="project-list-empty";box.textContent=e.message;const retry=document.createElement("button");retry.className="retry";retry.type="button";retry.textContent="Try again";retry.addEventListener("click",start);box.append(document.createElement("br"),retry);$("projectList").append(box);}}
     start();

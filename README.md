@@ -30,6 +30,7 @@ The child plays the working app on the left and describes changes on the right.
 - Friendly progress and errors instead of developer consoles
 - A jumping Builder Bunny shows real build, check, repair, and save stages
 - Builder Bunny stays in the chat history so the current app remains clear and playable during a build
+- Approved updates wait behind a “New version available” button, so a running game changes only when the child chooses
 
 ## Builds that keep working
 
