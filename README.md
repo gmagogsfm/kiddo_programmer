@@ -106,6 +106,8 @@ sudo systemctl restart kiddo-programmer
 
 `KIDDO_AGENT` accepts `codex`, `claude`, or `antigravity`. Setup writes explicit worker and supervisor models. Defaults are `gpt-5.6-sol` for Codex, the current `sonnet` alias with low effort for Claude, and `gemini-3.6-flash-low` for Antigravity.
 
+Builds have a five-minute total budget, use up to three worker/reviewer rounds, and share two concurrent coding-agent slots by default. These limits can be tuned with `BUILD_TIMEOUT_MS`, `MAX_SUPERVISOR_ROUNDS`, and `MAX_CONCURRENT_AGENTS` (maximum 4). Rejection reasons are written to the service journal so a grown-up can diagnose repeated failures.
+
 Projects default to `~/kiddo_projects`. Back up that folder only to storage the parent controls. Conversation files are excluded from Git commits but are included in a full-folder backup.
 
 To update Kiddo Programmer:

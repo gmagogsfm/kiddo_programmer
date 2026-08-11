@@ -187,21 +187,32 @@ write_default_config() {
     printf 'KIDDO_SUPERVISOR_MODEL="%s"\n' "$selected_model"
     printf 'AGENT_TIMEOUT_MS=240000\n'
     printf 'SUPERVISOR_TIMEOUT_MS=120000\n'
-    printf 'MAX_SUPERVISOR_ROUNDS=6\n'
+    printf 'BUILD_TIMEOUT_MS=300000\n'
+    printf 'MAX_SUPERVISOR_ROUNDS=3\n'
+    printf 'MAX_CONCURRENT_AGENTS=2\n'
   } > "$temporary_config"
 }
 
 update_selected_agent_in_config() {
   local temporary_config="$1"
   sudo awk -v selected="$selected_agent" '
-    BEGIN { replaced = 0 }
+    BEGIN { replaced = 0; build_timeout = 0; rounds = 0; concurrency = 0 }
     /^KIDDO_AGENT=/ {
       if (!replaced) print "KIDDO_AGENT=" selected
       replaced = 1
       next
     }
+    /^BUILD_TIMEOUT_MS=/ { build_timeout = 1; print; next }
+    /^MAX_SUPERVISOR_ROUNDS=6$/ { rounds = 1; print "MAX_SUPERVISOR_ROUNDS=3"; next }
+    /^MAX_SUPERVISOR_ROUNDS=/ { rounds = 1; print; next }
+    /^MAX_CONCURRENT_AGENTS=/ { concurrency = 1; print; next }
     { print }
-    END { if (!replaced) print "KIDDO_AGENT=" selected }
+    END {
+      if (!replaced) print "KIDDO_AGENT=" selected
+      if (!build_timeout) print "BUILD_TIMEOUT_MS=300000"
+      if (!rounds) print "MAX_SUPERVISOR_ROUNDS=3"
+      if (!concurrency) print "MAX_CONCURRENT_AGENTS=2"
+    }
   ' "$CONFIG_FILE" > "$temporary_config"
   sudo install -o root -g root -m 0600 "$temporary_config" "$CONFIG_FILE"
 }

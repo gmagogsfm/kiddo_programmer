@@ -23,6 +23,9 @@ test("setup owns coding-agent selection and authentication", async () => {
   assert.match(installer, /confirm_provider_data_use/);
   assert.match(installer, /KIDDO_AGENT/);
   assert.match(installer, /update_selected_agent_in_config/);
+  assert.match(installer, /BUILD_TIMEOUT_MS=300000/);
+  assert.match(installer, /MAX_SUPERVISOR_ROUNDS=3/);
+  assert.match(installer, /MAX_CONCURRENT_AGENTS=2/);
 });
 
 test("the service template contains no machine-specific home path", async () => {

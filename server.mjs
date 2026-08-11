@@ -5,6 +5,7 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createTaskPool, reviewRejectionLog, timeoutWithinDeadline } from "./scripts/build-control.mjs";
 import { buildAgentInvocation, defaultModel, extractAgentReply, normalizeAgent } from "./scripts/coding-agents.mjs";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
 import { browserSecurityHeaders, isSameOriginMutation, securePreviewHtml } from "./scripts/security.mjs";
@@ -18,7 +19,9 @@ const HOST = process.env.HOST || "0.0.0.0";
 const AGENT = normalizeAgent(process.env.KIDDO_AGENT || "codex");
 const AGENT_TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || process.env.CODEX_TIMEOUT_MS || 240_000);
 const SUPERVISOR_TIMEOUT_MS = Number(process.env.SUPERVISOR_TIMEOUT_MS || 120_000);
-const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(10, Number(process.env.MAX_SUPERVISOR_ROUNDS || 6)));
+const BUILD_TIMEOUT_MS = Math.max(60_000, Math.min(1_800_000, Number(process.env.BUILD_TIMEOUT_MS || 300_000)));
+const MAX_SUPERVISOR_ROUNDS = Math.max(2, Math.min(6, Number(process.env.MAX_SUPERVISOR_ROUNDS || 3)));
+const MAX_CONCURRENT_AGENTS = Math.max(1, Math.min(4, Number(process.env.MAX_CONCURRENT_AGENTS || 2)));
 const AGENT_PREFIX = AGENT === "antigravity" ? "ANTIGRAVITY" : AGENT.toUpperCase();
 const WORKER_MODEL = process.env.KIDDO_WORKER_MODEL || process.env[`${AGENT_PREFIX}_WORKER_MODEL`] || defaultModel(AGENT);
 const SUPERVISOR_MODEL = process.env.KIDDO_SUPERVISOR_MODEL || process.env[`${AGENT_PREFIX}_SUPERVISOR_MODEL`] || defaultModel(AGENT);
@@ -32,7 +35,7 @@ const SUPERVISOR_SCHEMA_PATH = path.join(ROOT, "schemas", "supervisor-response.s
 const activeRuns = new Set();
 const rateBuckets = new Map();
 let pendingBuilds = 0;
-let agentQueue = Promise.resolve();
+const agentPool = createTaskPool(MAX_CONCURRENT_AGENTS);
 let projectGitQueue = Promise.resolve();
 
 async function runCommand(command, args, cwd, extraEnv = {}) {
@@ -340,16 +343,23 @@ async function runAgentNow(dir, prompt, { mode = "worker", outputSchema, timeout
 }
 
 function runAgent(dir, prompt, options) {
-  const run = agentQueue.then(() => runAgentNow(dir, prompt, options));
-  agentQueue = run.catch(() => {});
-  return run;
+  const { deadlineAt = Infinity, timeoutMs = AGENT_TIMEOUT_MS, ...rest } = options || {};
+  return agentPool.run(
+    () => runAgentNow(dir, prompt, {
+      ...rest,
+      timeoutMs: Number.isFinite(deadlineAt)
+        ? timeoutWithinDeadline(timeoutMs, deadlineAt)
+        : timeoutMs
+    }),
+    { deadlineAt }
+  );
 }
 
 function recentHistory(project) {
   return project.messages.slice(-12).map((message) => `${message.role === "kid" ? "Kid" : "Buddy"}: ${message.text}`).join("\n");
 }
 
-async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply) {
+async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply, deadlineAt) {
   const prompt = buildSupervisorPrompt({
     age: project.meta.age,
     projectName: project.meta.name,
@@ -360,12 +370,13 @@ async function runSupervisor(dir, project, kidMessage, needsLogo, proposedReply)
     proposedReply
   });
   const schemaJson = await readFile(SUPERVISOR_SCHEMA_PATH, "utf8");
-  const response = await runAgent(dir, prompt, { mode: "supervisor", outputSchema: { path: SUPERVISOR_SCHEMA_PATH, json: schemaJson }, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT });
+  const response = await runAgent(dir, prompt, { mode: "supervisor", outputSchema: { path: SUPERVISOR_SCHEMA_PATH, json: schemaJson }, timeoutMs: SUPERVISOR_TIMEOUT_MS, model: SUPERVISOR_MODEL, reasoningEffort: SUPERVISOR_REASONING_EFFORT, deadlineAt });
   return parseSupervisorResponse(response);
 }
 
 async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgress = () => {}) {
   const stagingDir = await mkdtemp(path.join(tmpdir(), "kiddo-build-"));
+  const deadlineAt = Date.now() + BUILD_TIMEOUT_MS;
   const liveAppFile = path.join(dir, "app.html");
   const liveLogoFile = path.join(dir, "logo.svg");
   const stagedAppFile = path.join(stagingDir, "app.html");
@@ -380,7 +391,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
       attempt: async ({ round, feedback }) => {
         onProgress(round === 0 ? "building" : "fixing");
         const reply = round === 0
-          ? await runAgent(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo))
+          ? await runAgent(stagingDir, buildAgentPrompt(project, kidMessage, needsLogo), { deadlineAt })
           : await runAgent(stagingDir, buildRevisionPrompt({
               age: project.meta.age,
               projectName: project.meta.name,
@@ -388,7 +399,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
               feedback,
               validatorPath: VALIDATOR_PATH,
               needsLogo
-            }));
+            }), { deadlineAt });
 
         onProgress("checking");
         const html = await readFile(stagedAppFile, "utf8").catch(() => "");
@@ -406,9 +417,13 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
             feedback: `The automatic checks found these errors:\n- ${validation.errors.join("\n- ")}`,
             checks: ["Deterministic HTML and JavaScript validation failed."]
           };
+          console.warn(reviewRejectionLog(project.meta.id, round + 1, MAX_SUPERVISOR_ROUNDS, "automatic validation", lastReview.feedback));
         } else {
           onProgress("reviewing");
-          lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo, reply);
+          lastReview = await runSupervisor(stagingDir, project, kidMessage, needsLogo, reply, deadlineAt);
+          if (lastReview.verdict === "improve") {
+            console.warn(reviewRejectionLog(project.meta.id, round + 1, MAX_SUPERVISOR_ROUNDS, "supervisor", lastReview.feedback));
+          }
         }
         return { html, logo, reply, validation, review: lastReview };
       }
