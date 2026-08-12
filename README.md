@@ -111,6 +111,8 @@ sudo systemctl restart kiddo-programmer
 
 Builds have a five-minute total budget, use up to three worker/reviewer rounds, and share two concurrent coding-agent slots by default. These limits can be tuned with `BUILD_TIMEOUT_MS`, `MAX_SUPERVISOR_ROUNDS`, and `MAX_CONCURRENT_AGENTS` (maximum 4). Rejection reasons are written to the service journal so a grown-up can diagnose repeated failures.
 
+First builds begin with a safe local SVG logo, so a coding agent that skips logo work cannot trap the project in repeated logo-only repair rounds. Provider quota and sign-in failures are reported in child-friendly language instead of being mislabeled as app-check failures; a grown-up can then check the coding account, add credits where available, or wait for its usage limit to reset.
+
 Projects default to `~/kiddo_projects`. Back up that folder only to storage the parent controls. Conversation files are excluded from Git commits but are included in a full-folder backup.
 
 To update Kiddo Programmer:

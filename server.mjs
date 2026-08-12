@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskPool, reviewRejectionLog, timeoutWithinDeadline } from "./scripts/build-control.mjs";
-import { buildAgentInvocation, defaultModel, extractAgentReply, normalizeAgent } from "./scripts/coding-agents.mjs";
+import { buildAgentInvocation, classifyAgentFailure, defaultModel, extractAgentReply, normalizeAgent } from "./scripts/coding-agents.mjs";
+import { starterLogoSvg } from "./scripts/project-assets.mjs";
 import { buildRevisionPrompt, buildSupervisorPrompt, parseSupervisorResponse, repeatUntilApproved } from "./scripts/supervision.mjs";
 import { browserSecurityHeaders, isSameOriginMutation, securePreviewHtml } from "./scripts/security.mjs";
 import { validateHtml, validateLogoSvg } from "./scripts/validator.mjs";
@@ -279,10 +280,10 @@ function starterPage(name) {
 function buildAgentPrompt(project, kidMessage, needsLogo = false) {
   const history = project.messages.slice(-12).map((m) => `${m.role === "kid" ? "Kid" : "Buddy"}: ${m.text}`).join("\n");
   const fileRule = needsLogo
-    ? "Read and edit app.html, and create logo.svg in the current project folder. Do not touch any other files."
+    ? "Read and edit app.html and logo.svg in the current project folder. A safe starter logo is already present; improve it to match the child's idea. Do not touch any other files."
     : "Read and edit ONLY app.html in the current project folder.";
   const logoRule = needsLogo
-    ? `9. This is the project's first idea. Create logo.svg as a cheerful square icon that represents the idea. It must have viewBox="0 0 128 128", look clear at 44×44 pixels, and use only simple SVG shapes and optional short text. Use flat colors; do not use scripts, links, images, CSS url(), animation, external resources, or personal information.
+    ? `9. This is the project's first idea. Improve logo.svg into a cheerful square icon that represents the idea. It must keep a viewBox, look clear at 44×44 pixels, and use only simple SVG shapes and optional short text. Use flat colors; do not use scripts, links, images, CSS url(), animation, external resources, or personal information.
 10. Run: node ${JSON.stringify(VALIDATOR_PATH)} app.html logo.svg and fix every reported error.`
     : "";
   return `You are a warm, encouraging coding buddy working directly with a ${project.meta.age}-year-old child.
@@ -328,6 +329,7 @@ async function runAgentNow(dir, prompt, { mode = "worker", outputSchema, timeout
     });
     let stdout = "";
     let completeOutput = "";
+    let diagnosticOutput = "";
     let stderr = "";
     let finalText = "";
     function stop(signal) {
@@ -341,6 +343,7 @@ async function runAgentNow(dir, prompt, { mode = "worker", outputSchema, timeout
       setTimeout(() => stop("SIGKILL"), 3_000).unref();
     }, timeoutMs);
     child.stdout.on("data", (chunk) => {
+      diagnosticOutput = (diagnosticOutput + chunk).slice(-32_000);
       if (invocation.output !== "codex-jsonl") {
         completeOutput = (completeOutput + chunk).slice(-1_000_000);
         return;
@@ -363,9 +366,17 @@ async function runAgentNow(dir, prompt, { mode = "worker", outputSchema, timeout
         try { finalText = extractAgentReply(completeOutput, invocation.output); }
         catch { finalText = ""; }
       }
+      const failure = classifyAgentFailure(`${stderr}\n${diagnosticOutput}\n${completeOutput}`);
       if (signal) reject(new Error("The coding buddy took too long. Please try again."));
-      else if (code !== 0) reject(new Error(/login|sign.?in|auth/i.test(stderr) ? "The coding buddy needs a grown-up to sign in on the Pi first." : "The coding buddy had a hiccup. Please try again."));
-      else if (!finalText) reject(new Error("The coding buddy finished without an answer. Please try again."));
+      else if (code !== 0 || !finalText) {
+        const error = failure === "quota"
+          ? new Error("The coding buddy has used all its available turns for now. Please ask a grown-up to check the coding account or try again later.")
+          : failure === "auth"
+            ? new Error("The coding buddy needs a grown-up to sign in on the Raspberry Pi first.")
+            : new Error(code !== 0 ? "The coding buddy had a hiccup. Please try again." : "The coding buddy finished without an answer. Please try again.");
+        if (failure === "quota" || failure === "auth") error.code = "KIDDO_AGENT_ACTION_REQUIRED";
+        reject(error);
+      }
       else resolve(finalText);
     });
   });
@@ -415,6 +426,7 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
 
   try {
     await copyFile(liveAppFile, stagedAppFile);
+    if (needsLogo) await writeFile(stagedLogoFile, starterLogoSvg(project.meta.name));
     const outcome = await repeatUntilApproved({
       maxRounds: MAX_SUPERVISOR_ROUNDS,
       attempt: async ({ round, feedback }) => {
@@ -473,7 +485,9 @@ async function buildWithSupervision(dir, project, kidMessage, oldHtml, onProgres
     console.error("Reviewed build failed:", error.message);
     return {
       html: oldHtml,
-      reply: "My checker had a little wobble, so I kept your working app safe. Please try your idea again!",
+      reply: error.code === "KIDDO_AGENT_ACTION_REQUIRED"
+        ? error.message
+        : "My checker had a little wobble, so I kept your working app safe. Please try your idea again!",
       validation: { ok: true, errors: [], warnings: ["The reviewed build could not finish; the live app was not changed."] },
       review: lastReview,
       published: false

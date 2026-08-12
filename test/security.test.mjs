@@ -88,3 +88,13 @@ test("project rename and deletion are explicit, scoped, and build-safe", async (
   assert.match(ui, /aria-label.*Rename/);
   assert.match(ui, /aria-label.*Delete/);
 });
+
+test("quota exhaustion reaches the child while logo generation has a safe fallback", async () => {
+  const server = await readFile(path.join(root, "server.mjs"), "utf8");
+  assert.match(server, /diagnosticOutput/);
+  assert.match(server, /failure === "quota"/);
+  assert.match(server, /KIDDO_AGENT_ACTION_REQUIRED/);
+  assert.match(server, /reply: error\.code === "KIDDO_AGENT_ACTION_REQUIRED"/);
+  assert.match(server, /writeFile\(stagedLogoFile, starterLogoSvg\(project\.meta\.name\)\)/);
+  assert.match(server, /safe starter logo is already present/);
+});

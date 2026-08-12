@@ -6,6 +6,13 @@ const DEFAULTS = Object.freeze({
 
 export const SUPPORTED_AGENTS = Object.freeze(Object.keys(DEFAULTS));
 
+export function classifyAgentFailure(output) {
+  const text = String(output || "").toLowerCase();
+  if (/you(?:'|’)ve hit your usage limit|usage_limit_exceeded|rate_limit_reached|workspace_(?:member|owner)_(?:credits_depleted|usage_limit_reached)|insufficient_quota|resource_exhausted|too many requests|\b429\b|\b(?:rate|usage) limit (?:reached|exceeded|exhausted)|\bquota (?:reached|exceeded|exhausted)|\b(?:credits?|balance) (?:depleted|exhausted|used up)|credit balance.{0,30}too low|out of credits/.test(text)) return "quota";
+  if (/login|sign.?in|not authenticated|authentication required|unauthorized|invalid (?:api )?key|auth token/.test(text)) return "auth";
+  return "generic";
+}
+
 export function normalizeAgent(value = "codex") {
   const agent = String(value).trim().toLowerCase();
   if (!SUPPORTED_AGENTS.includes(agent)) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAgentInvocation, extractAgentReply } from "../scripts/coding-agents.mjs";
+import { buildAgentInvocation, classifyAgentFailure, extractAgentReply } from "../scripts/coding-agents.mjs";
 
 const common = { dir: "/tmp/project", prompt: "Build a game", model: "test-model", reasoningEffort: "low" };
 
@@ -30,4 +30,17 @@ test("Antigravity uses print mode, its sandbox and an explicit model", () => {
   assert.ok(call.args.includes("--json-schema"));
   assert.deepEqual(call.args.slice(-2), ["--print", "Build a game"]);
   assert.equal(extractAgentReply('{"status":"SUCCESS","response":"Ready\\n"}', call.output), "Ready");
+});
+
+test("classifies quota exhaustion separately from authentication and generic failures", () => {
+  for (const message of [
+    "You've hit your usage limit.",
+    '{"type":"error","code":"usage_limit_exceeded"}',
+    "rate_limit_reached: workspace_member_credits_depleted",
+    "RESOURCE_EXHAUSTED: quota exceeded",
+    "HTTP 429 Too Many Requests",
+    "Credit balance is too low"
+  ]) assert.equal(classifyAgentFailure(message), "quota", message);
+  assert.equal(classifyAgentFailure("Authentication required: please sign in"), "auth");
+  assert.equal(classifyAgentFailure("Unexpected worker crash"), "generic");
 });
