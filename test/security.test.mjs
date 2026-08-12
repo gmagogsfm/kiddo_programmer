@@ -68,3 +68,23 @@ test("approved app versions wait for the child before replacing the preview", as
   assert.match(pendingHandlers, /updateReady.*hidden=true/);
   assert.match(ui, /loadUpdate.*addEventListener\("click",loadPendingVersion\)/);
 });
+
+test("project rename and deletion are explicit, scoped, and build-safe", async () => {
+  const [server, ui] = await Promise.all([
+    readFile(path.join(root, "server.mjs"), "utf8"),
+    readFile(path.join(root, "public/index.html"), "utf8")
+  ]);
+  assert.match(server, /req\.method === "PATCH" && !action/);
+  assert.match(server, /req\.method === "DELETE" && !action/);
+  assert.match(server, /activeRuns\.has\(id\).*before renaming/s);
+  assert.match(server, /activeRuns\.has\(id\).*before deleting/s);
+  assert.match(server, /await rm\(dir, \{ recursive: true \}\)/);
+  assert.match(server, /recordProjectManagement\(project\.meta, "delete"\)/);
+  assert.match(ui, /id="renameDialog"/);
+  assert.match(ui, /id="deleteDialog"/);
+  assert.match(ui, /permanently deletes the app and its chat/);
+  assert.match(ui, /method:"PATCH"/);
+  assert.match(ui, /method:"DELETE"/);
+  assert.match(ui, /aria-label.*Rename/);
+  assert.match(ui, /aria-label.*Delete/);
+});

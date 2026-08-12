@@ -1,6 +1,6 @@
 {
   "name": "kiddo-programmer",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "description": "A Raspberry Pi powered, kid-friendly web app builder.",
   "license": "Apache-2.0",

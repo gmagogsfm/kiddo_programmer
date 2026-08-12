@@ -104,6 +104,35 @@ function recordProjectVersion(meta, action, supervisorReview = null) {
   });
 }
 
+function recordProjectManagement(meta, action) {
+  return queueProjectGit(async () => {
+    const projectPath = `${meta.id}/`;
+    const message = action === "delete"
+      ? `Delete project: ${safeCommitName(meta.name)}`
+      : `Rename project: ${safeCommitName(meta.name)}`;
+    try {
+      const addArgs = action === "delete"
+        ? ["-c", "core.hooksPath=/dev/null", "add", "-A", "--", projectPath]
+        : ["-c", "core.hooksPath=/dev/null", "add", "--", `${meta.id}/project.json`];
+      await runCommand("git", addArgs, PROJECTS);
+      await runCommand("git", ["-c", "core.hooksPath=/dev/null", "commit", "-m", message, "--", projectPath], PROJECTS, {
+        GIT_AUTHOR_NAME: "Kiddo Project Manager",
+        GIT_AUTHOR_EMAIL: "projects@kiddo.local"
+      });
+    } catch (error) {
+      console.error(`Could not commit project ${action}:`, error.message);
+      return { committed: false, pushed: false, owner: "system" };
+    }
+    try {
+      await runCommand("git", ["-c", "core.hooksPath=/dev/null", "push", "origin", "main"], PROJECTS);
+      return { committed: true, pushed: true, owner: "system" };
+    } catch (error) {
+      console.error(`Project ${action} was committed locally but could not be pushed:`, error.message);
+      return { committed: true, pushed: false, owner: "system" };
+    }
+  });
+}
+
 function json(res, status, value) {
   const body = JSON.stringify(value);
   res.writeHead(status, browserSecurityHeaders({
@@ -498,6 +527,29 @@ async function handleApi(req, res, url) {
   if (!match) return json(res, 404, { error: "Not found." });
   const [, id, action] = match;
   if (req.method === "GET" && !action) return json(res, 200, publicProject(await readProject(id)));
+  if (req.method === "PATCH" && !action) {
+    if (activeRuns.has(id)) return json(res, 409, { error: "Wait for Builder Bunny to finish before renaming this project." });
+    const input = await bodyJson(req);
+    const name = String(input.name || "").trim().slice(0, 60);
+    if (name.length < 2) return json(res, 400, { error: "Please give your project a name." });
+    const project = await readProject(id);
+    let versionControl = { committed: false, pushed: false, owner: "system" };
+    if (name !== project.meta.name) {
+      project.meta.name = name;
+      project.meta.updatedAt = new Date().toISOString();
+      await saveJson(path.join(await existingProjectDir(id), "project.json"), project.meta);
+      versionControl = await recordProjectManagement(project.meta, "rename");
+    }
+    return json(res, 200, { ...publicProject(await readProject(id)), versionControl });
+  }
+  if (req.method === "DELETE" && !action) {
+    if (activeRuns.has(id)) return json(res, 409, { error: "Wait for Builder Bunny to finish before deleting this project." });
+    const project = await readProject(id);
+    const dir = await existingProjectDir(id);
+    await rm(dir, { recursive: true });
+    const versionControl = await recordProjectManagement(project.meta, "delete");
+    return json(res, 200, { deleted: true, id, versionControl });
+  }
   if (req.method === "GET" && action === "logo") {
     const logo = await readFile(path.join(await existingProjectDir(id), "logo.svg"));
     res.writeHead(200, {
