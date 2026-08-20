@@ -37,6 +37,7 @@ test("the service template contains no machine-specific home path", async () => 
   assert.match(template, /ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_AGENT_STATE_DIR@/);
   assert.match(template, /NoNewPrivileges=true/);
   assert.match(template, /CapabilityBoundingSet=/);
+  assert.match(template, /RestrictAddressFamilies=.*AF_NETLINK/);
 });
 
 test("the npm package includes the runtime and installer", async () => {

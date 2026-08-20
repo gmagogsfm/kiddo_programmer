@@ -33,7 +33,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 CapabilityBoundingSet=
 SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 ReadWritePaths=@KIDDO_PROJECTS_DIR@ @KIDDO_AGENT_STATE_DIR@ -@KIDDO_AGENT_STATE_EXTRA@
 UMask=0077
 
